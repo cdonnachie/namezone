@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/client/api";
 
 export function DisconnectButton({ namespace }: { namespace: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   return (
@@ -20,11 +18,10 @@ export function DisconnectButton({ namespace }: { namespace: string }) {
         try {
           await logout(namespace);
           toast.success("Disconnected");
-          router.push(`/${namespace}`);
-          router.refresh();
+          // Full navigation - see connect-flow.tsx for why not push()+refresh().
+          window.location.assign(`/${namespace}`);
         } catch {
           toast.error("Failed to disconnect");
-        } finally {
           setLoading(false);
         }
       }}

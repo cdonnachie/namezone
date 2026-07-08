@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertCircle, Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,7 +57,6 @@ function ManualVerification({
   chainName: string;
   addressPlaceholder: string;
 }) {
-  const router = useRouter();
   const [address, setAddress] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
@@ -83,11 +81,15 @@ function ManualVerification({
     try {
       await verifyChallenge(namespace, address.trim(), message, signature.trim());
       toast.success("Ownership verified");
-      router.push(`/${namespace}/dashboard`);
-      router.refresh();
+      // Full navigation, deliberately not router.push() + router.refresh():
+      // refresh() can cancel the in-flight push (seen on mobile, where the
+      // slower RSC fetch loses the race), stranding the user on this page
+      // despite being logged in. A hard navigation can't be cancelled and
+      // also re-renders the nav bar with the new session state, which is
+      // what the refresh() was for.
+      window.location.assign(`/${namespace}/dashboard`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Verification failed.");
-    } finally {
       setLoading(null);
     }
   }

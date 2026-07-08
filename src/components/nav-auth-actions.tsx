@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import { truncateAddress } from "@/lib/utils";
 import Link from "next/link";
 
 export function NavAuthActions({ namespace, address }: { namespace: string; address: string | null }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   if (!address) {
@@ -25,11 +23,13 @@ export function NavAuthActions({ namespace, address }: { namespace: string; addr
     try {
       await logout(namespace);
       toast.success("Disconnected");
-      router.push(`/${namespace}`);
-      router.refresh();
+      // Full navigation instead of router.push() + router.refresh(): the
+      // refresh can cancel the in-flight push on slow connections (see
+      // connect-flow.tsx), and a hard load guarantees every server
+      // component re-renders logged-out.
+      window.location.assign(`/${namespace}`);
     } catch {
       toast.error("Failed to disconnect");
-    } finally {
       setLoading(false);
     }
   }
