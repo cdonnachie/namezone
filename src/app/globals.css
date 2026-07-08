@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Avian Network brand palette (mainnet):
+ *   #34f5c6 bright mint   #34e2d5 turquoise   #17a7b6 teal-blue
+ *   #19827a dark teal     #2a737f slate-teal
+ * Saturated brand color is reserved for primary actions, focus rings, and
+ * data-viz; body text/borders stay neutral gray for readability.
+ */
+/*
+ * Three-tier elevation ladder, reused in both themes:
+ *   --sidebar    chrome/toolbar surface (the sticky top nav) - recedes
+ *   --background page body
+ *   --card       elevated panels - pops
+ * (The --sidebar tokens have no literal sidebar in this app; they're
+ * repurposed as the nav bar's distinct "chrome" surface.)
+ */
+:root {
+  --sidebar: #eef5f3;
+  --background: #f8fbfa;
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: #ffffff;
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #19827a;
+  --primary-foreground: #f5fffc;
+  --secondary: #eef6f5;
+  --secondary-foreground: #0f4a45;
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: #e6fbf6;
+  --accent-foreground: #0f4a45;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: #17a7b6;
+  --chart-1: #34f5c6;
+  --chart-2: #34e2d5;
+  --chart-3: #17a7b6;
+  --chart-4: #19827a;
+  --chart-5: #2a737f;
+  --radius: 0.625rem;
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #19827a;
+  --sidebar-primary-foreground: #f5fffc;
+  --sidebar-accent: #e6fbf6;
+  --sidebar-accent-foreground: #0f4a45;
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: #17a7b6;
+  --foreground: oklch(0.145 0 0);
+}
+
+.dark {
+  --sidebar: #04100d;
+  --background: #0a1e1a;
+  --foreground: #eafcf8;
+  --card: #15332e;
+  --card-foreground: #eafcf8;
+  --popover: #15332e;
+  --popover-foreground: #eafcf8;
+  --primary: #34f5c6;
+  --primary-foreground: #052e29;
+  --secondary: #1c3d37;
+  --secondary-foreground: #eafcf8;
+  --muted: #1c3d37;
+  --muted-foreground: #83aba5;
+  --accent: #1c3d37;
+  --accent-foreground: #eafcf8;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #34f5c6;
+  --chart-1: #34f5c6;
+  --chart-2: #34e2d5;
+  --chart-3: #17a7b6;
+  --chart-4: #19827a;
+  --chart-5: #2a737f;
+  --sidebar-foreground: #eafcf8;
+  --sidebar-primary: #34f5c6;
+  --sidebar-primary-foreground: #052e29;
+  --sidebar-accent: #1c3d37;
+  --sidebar-accent-foreground: #eafcf8;
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: #34f5c6;
+}
+
+/*
+ * Radiant Wave Names brand palette:
+ *   #00f2f2 electric teal   #7fe0ff soft blue   #00a8de sky blue
+ *   #4495f2 / #4285f4 / #356fdb / #2f5ec4 / #1f4495 blue 1-5 ramp
+ *   #007a74 / #004946 supporting green
+ * Scoped to the [data-namespace="radiant"] wrapper div rendered by
+ * app/[namespace]/layout.tsx, not <html>, so it only affects Radiant pages -
+ * the neutral portal at "/" and the Avian namespace keep the palette above.
+ */
+[data-namespace="radiant"] {
+  --sidebar: #eef5fd;
+  --background: #f7fbff;
+  --card: #ffffff;
+  --primary: #356fdb;
+  --primary-foreground: #f5f9ff;
+  --secondary: #eaf3fe;
+  --secondary-foreground: #1f4495;
+  --accent: #e3f8fb;
+  --accent-foreground: #1f4495;
+  --ring: #00a8de;
+  --chart-1: #00f2f2;
+  --chart-2: #7fe0ff;
+  --chart-3: #00a8de;
+  --chart-4: #4285f4;
+  --chart-5: #1f4495;
+  --sidebar-primary: #356fdb;
+  --sidebar-primary-foreground: #f5f9ff;
+  --sidebar-accent: #eaf3fe;
+  --sidebar-accent-foreground: #1f4495;
+  --sidebar-ring: #00a8de;
+}
+
+.dark [data-namespace="radiant"] {
+  --sidebar: #000000;
+  --background: #000000;
+  --foreground: #ededed;
+  --card: #0a0a0d;
+  --card-foreground: #ededed;
+  --popover: #0a0a0d;
+  --popover-foreground: #ededed;
+  --primary: #00a8de;
+  --primary-foreground: #001c28;
+  --secondary: #141418;
+  --secondary-foreground: #ededed;
+  --muted: #141418;
+  --muted-foreground: #8f8f99;
+  --accent: #141418;
+  --accent-foreground: #ededed;
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: #00a8de;
+  --chart-1: #00f2f2;
+  --chart-2: #7fe0ff;
+  --chart-3: #00a8de;
+  --chart-4: #4285f4;
+  --chart-5: #1f4495;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #00a8de;
+  --sidebar-primary-foreground: #001c28;
+  --sidebar-accent: #141418;
+  --sidebar-accent-foreground: #ededed;
+  --sidebar-ring: #00a8de;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

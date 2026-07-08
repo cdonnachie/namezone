@@ -1,0 +1,145 @@
+// Prisma schema for the Name Zone multi-namespace DNS gateway.
+// Default datasource is SQLite for easy local development.
+// For production, switch the provider to "postgresql" and set DATABASE_URL
+// to a Postgres connection string (schema is fully compatible with both).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A short-lived login challenge / session record keyed by wallet address.
+// The same table is used to track the nonce during the challenge phase and,
+// once verified, the active session (see `verified` + `expiresAt`). Scoped
+// to a namespace since the same address string could mean different chain
+// identities across namespaces.
+model UserSession {
+  id        String   @id @default(cuid())
+  namespace String
+  address   String
+  nonce     String   @unique
+  message   String
+  verified  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([namespace, address])
+  @@index([nonce])
+}
+
+enum ClaimedNameStatus {
+  ACTIVE // current owner verified; records may be managed normally
+  TRANSFERRED // ownership changed (detected live or by the background watcher);
+  // all prior records disabled, awaiting the new owner's first authenticated visit
+  SUSPENDED // reserved for future admin/abuse action; not set by any code path yet
+}
+
+// A source name (e.g. "bob.avn", "bob.rxd") claimed within a namespace.
+model ClaimedName {
+  id                   String            @id @default(cuid())
+  namespace            String            // "avian" | "radiant"
+  name                 String            // e.g. "bob.avn" (lowercase, normalized)
+  ownerAddress         String
+  status               ClaimedNameStatus @default(ACTIVE)
+  previousOwnerAddress String?
+  transferredAt        DateTime?
+  verifiedAt           DateTime
+  // Last time ANY ownership check touched this row (live request or the
+  // background watcher), regardless of whether it changed. Useful to spot
+  // names the watcher isn't reaching.
+  lastOwnershipCheckAt DateTime          @default(now())
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  records DnsRecord[]
+
+  @@unique([namespace, name])
+  @@index([namespace, ownerAddress])
+  @@index([namespace, status])
+}
+
+enum DnsRecordType {
+  A
+  AAAA
+  CNAME
+  TXT
+}
+
+enum DnsRecordStatus {
+  ACTIVE
+  DISABLED // removed from PowerDNS but kept locally for audit/history; see disabledReason
+}
+
+enum DnsRecordDisabledReason {
+  OWNERSHIP_CHANGED
+}
+
+model DnsRecord {
+  id               String                   @id @default(cuid())
+  namespace        String                   // "avian" | "radiant"
+  claimedName      String                   // e.g. "bob.avn" - matches ClaimedName.name within namespace
+  claimedNameRef   ClaimedName              @relation(fields: [namespace, claimedName], references: [namespace, name], onDelete: Cascade)
+  fqdn             String                   // "test.bob.avn.zone." (absolute, trailing dot)
+  relativeHost     String                   // "test" or "@" for apex
+  type             DnsRecordType
+  value            String
+  ttl              Int                      @default(300)
+  status           DnsRecordStatus          @default(ACTIVE)
+  disabledReason   DnsRecordDisabledReason?
+  // True for _acme-challenge.* TXT records. Multiple TXT rows may share the
+  // same (fqdn, type) - ACME clients sometimes need several concurrent
+  // challenge values - so uniqueness is keyed on the value too.
+  isAcmeChallenge  Boolean                  @default(false)
+  // Set only for ACME TXT records; they are auto-deleted after this time
+  // (enforced lazily on read - see src/lib/dns/reconcile.ts).
+  expiresAt        DateTime?
+  powerdnsRecordId String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([namespace, fqdn, type, value])
+  @@index([namespace, claimedName])
+  @@index([expiresAt])
+  @@index([status])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  DISABLE // soft-disabled due to ownership transfer, not a user-initiated delete
+}
+
+// Plain descriptive fields (not a relation) - audit history should survive
+// independently of the ClaimedName/DnsRecord rows it describes.
+model AuditLog {
+  id          String      @id @default(cuid())
+  namespace   String
+  address     String
+  claimedName String
+  action      AuditAction
+  fqdn        String
+  type        String
+  oldValue    String?
+  newValue    String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([namespace, claimedName])
+  @@index([namespace, address])
+}
+
+// Simple fixed-window rate limiting store, keyed by address + action bucket.
+model RateLimitBucket {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. "dns-write:avian:RADDRESS1"
+  count     Int      @default(0)
+  windowEnd DateTime
+
+  @@index([key])
+}

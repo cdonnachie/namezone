@@ -1,0 +1,128 @@
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(body?.error ?? "Request failed.", res.status);
+  }
+  return body as T;
+}
+
+export interface ChallengeResponse {
+  message: string;
+  nonce: string;
+}
+export function requestChallenge(namespace: string, address: string) {
+  return request<ChallengeResponse>(`/api/${namespace}/auth/challenge`, {
+    method: "POST",
+    body: JSON.stringify({ address }),
+  });
+}
+
+export interface VerifyResponse {
+  address: string;
+}
+export function verifyChallenge(namespace: string, address: string, message: string, signature: string) {
+  return request<VerifyResponse>(`/api/${namespace}/auth/verify`, {
+    method: "POST",
+    body: JSON.stringify({ address, message, signature }),
+  });
+}
+
+export function logout(namespace: string) {
+  return request<{ ok: true }>(`/api/${namespace}/auth/logout`, { method: "POST" });
+}
+
+export interface ClaimedNameSummary {
+  name: string;
+  zone: string;
+  recordCount: number;
+  lastUpdated: string;
+  transferJustDetected: boolean;
+}
+export function fetchOwnedNames(namespace: string) {
+  return request<{ names: ClaimedNameSummary[] }>(`/api/${namespace}/names`);
+}
+
+export type BasicRecordType = "A" | "AAAA" | "CNAME";
+
+export interface DnsRecordDto {
+  id: string;
+  claimedName: string;
+  fqdn: string;
+  relativeHost: string;
+  type: BasicRecordType | "TXT";
+  value: string;
+  ttl: number;
+  isAcmeChallenge: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export function fetchDnsRecords(namespace: string, name: string) {
+  return request<{ name: string; zone: string; records: DnsRecordDto[] }>(
+    `/api/${namespace}/dns/${encodeURIComponent(name)}`,
+  );
+}
+
+export function createOrUpdateRecord(
+  namespace: string,
+  name: string,
+  data: { hostname: string; type: BasicRecordType; value: string },
+) {
+  return request<{ record: DnsRecordDto }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/records`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteRecord(namespace: string, name: string, data: { hostname: string; type: BasicRecordType }) {
+  return request<{ ok: true }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/records`, {
+    method: "DELETE",
+    body: JSON.stringify(data),
+  });
+}
+
+export function createAcmeChallenge(
+  namespace: string,
+  name: string,
+  data: { hostname: string; value: string; expiryHours?: number },
+) {
+  return request<{ record: DnsRecordDto }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/acme`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteAcmeChallenge(namespace: string, name: string, data: { hostname: string; value: string }) {
+  return request<{ ok: true }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/acme`, {
+    method: "DELETE",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface AuditLogDto {
+  id: string;
+  claimedName: string;
+  action: "CREATE" | "UPDATE" | "DELETE" | "DISABLE";
+  fqdn: string;
+  type: string;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+}
+export function fetchAuditLogs(namespace: string) {
+  return request<{ logs: AuditLogDto[] }>(`/api/${namespace}/audit`);
+}
