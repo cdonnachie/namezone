@@ -16,6 +16,10 @@ export default async function HelpPage({
   }
 
   const example = ns.exampleNames[0];
+  // Shown in the "Report abuse" card below - a visible abuse contact is a
+  // Public Suffix List inclusion requirement, so keep this section (and the
+  // inbox behind it) alive for as long as the zones are PSL-listed.
+  const abuseEmail = process.env.ABUSE_CONTACT_EMAIL ?? "craig.donnachie@gmail.com";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
@@ -126,6 +130,23 @@ export default async function HelpPage({
             every write is checked against live {ns.chainName} ownership first. If the name is
             ever transferred to a new owner, the previous owner&apos;s records are disabled
             automatically and the new owner starts with a clean slate.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card id="abuse">
+        <CardHeader>
+          <CardTitle>Report abuse</CardTitle>
+          <CardDescription>
+            Each site under {ns.dnsZone} is operated independently by whoever owns the
+            corresponding {ns.chainName} name - not by us. If you believe a {ns.dnsZone}{" "}
+            subdomain is hosting phishing, malware, or other abusive content, please report it
+            to{" "}
+            <a href={`mailto:${abuseEmail}`} className="font-medium text-primary underline underline-offset-4">
+              {abuseEmail}
+            </a>{" "}
+            with the full hostname and a short description. We review every report and can
+            disable the offending DNS records.
           </CardDescription>
         </CardHeader>
       </Card>

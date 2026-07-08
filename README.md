@@ -210,7 +210,10 @@ ever change.
 - A namespace's own DNS zone apex and its reserved hostnames (`ns1`/`ns2`/`www`) can never be
   modified, and the corresponding source names (`www.avn`, `www.rxd`, ...) can't be claimed or
   managed at all - even by their genuine on-chain owner (`RESERVED_ROOT_HOSTS` in
-  `src/lib/dns/constants.ts`).
+  `src/lib/dns/constants.ts`). Enforced twice, independently: at the API authorization layer
+  (`authorizeFqdnForName`) and again inside the PowerDNS client itself, whose `patchZone` throws
+  on any write targeting the apex, a reserved name (or child of one), or anything outside the
+  zone being patched - so even a bug upstream can't produce such a write.
 - One name owner can never touch another owner's namespace (including as a CNAME target), even
   across different namespaces.
 - IPv4/IPv6 values are strictly validated; Unicode/punycode names are rejected for MVP.
