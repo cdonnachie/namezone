@@ -74,7 +74,7 @@ export default async function LookupPage({
       {resolvedName && !error && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-mono text-base">{sourceNameToBaseFqdn(resolvedName, ns)}</CardTitle>
+            <CardTitle className="break-all font-mono text-base">{sourceNameToBaseFqdn(resolvedName, ns)}</CardTitle>
             <CardDescription>
               {records.length} active record{records.length === 1 ? "" : "s"}
             </CardDescription>

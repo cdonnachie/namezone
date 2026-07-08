@@ -51,14 +51,16 @@ export default async function DashboardPage({
           {names.map((n) => (
             <Card key={n.name} className="flex flex-col">
               <CardHeader className="flex-1">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Globe className="size-4 text-muted-foreground" />
-                    {n.name}
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="flex min-w-0 items-center gap-2 text-lg">
+                    <Globe className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="break-all">{n.name}</span>
                   </CardTitle>
-                  <Badge variant="secondary">{n.recordCount} record{n.recordCount === 1 ? "" : "s"}</Badge>
+                  <Badge variant="secondary" className="shrink-0">
+                    {n.recordCount} record{n.recordCount === 1 ? "" : "s"}
+                  </Badge>
                 </div>
-                <CardDescription className="font-mono">{n.zone}</CardDescription>
+                <CardDescription className="break-all font-mono">{n.zone}</CardDescription>
                 {n.transferJustDetected && (
                   <Badge className="mt-2 w-fit bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400">
                     Ownership recently transferred to you - old records were disabled

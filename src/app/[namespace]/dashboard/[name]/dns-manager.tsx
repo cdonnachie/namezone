@@ -153,11 +153,14 @@ export function DnsManager({
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <span className="font-mono">{name}</span>
+          {/* min-w-0 lets this side shrink instead of pushing the action
+              buttons out of the card; flex-wrap + break-all let long names
+              (labels can be up to 63 chars) wrap onto extra lines. */}
+          <div className="min-w-0">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-xl">
+              <span className="break-all font-mono">{name}</span>
               <span className="text-muted-foreground">&rarr;</span>
-              <span className="font-mono text-primary">{zone}</span>
+              <span className="break-all font-mono text-primary">{zone}</span>
               <CopyInline value={zone} />
             </CardTitle>
             <CardDescription className="mt-1">
@@ -165,7 +168,7 @@ export function DnsManager({
               {MAX_ACME_TXT_RECORDS} active SSL challenges
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
             <Dialog
               open={acmeOpen}
               onOpenChange={setAcmeOpen}
