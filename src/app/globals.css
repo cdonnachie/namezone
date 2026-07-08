@@ -105,7 +105,9 @@
  * (#0a0d0c / #101614) where Radiant's are blue-tinted (#0a0a0d / #141418).
  */
 .dark {
-  --sidebar: #000000;
+  /* Chrome sits a step above the black page (matches --secondary) so the
+     sticky nav reads as its own surface, not a borderline on black. */
+  --sidebar: #101614;
   --background: #000000;
   --foreground: #eafcf8;
   --card: #0a0d0c;
@@ -171,7 +173,8 @@
 }
 
 .dark [data-namespace="radiant"] {
-  --sidebar: #000000;
+  /* Same chrome-above-page lift as the base .dark theme, blue-tinted. */
+  --sidebar: #141418;
   --background: #000000;
   --foreground: #ededed;
   --card: #0a0a0d;
