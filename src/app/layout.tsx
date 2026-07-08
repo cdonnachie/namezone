@@ -34,6 +34,12 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "Name Zone",
   description: "Manage public DNS records tied to on-chain name ownership.",
+  // Deliberately NO `icons` here: declaring one makes Next emit the portal
+  // icon link on every page ALONGSIDE the namespace layouts' branded icons
+  // (parent+child icon links accumulate rather than replace), and browsers
+  // then pick between the two inconsistently. The neutral portal icon is
+  // served via the browser's implicit /favicon.ico fallback instead
+  // (public/favicon.ico), which only applies to pages that declare no icon.
 };
 
 export const viewport: Viewport = {

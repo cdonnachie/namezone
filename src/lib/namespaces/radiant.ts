@@ -19,7 +19,7 @@ export const radiantNamespace: NamespaceConfig = {
   dnsZone: (process.env.RADIANT_DNS_ZONE ?? "rxd.zone").trim().toLowerCase(),
   logoPath: "/rxd-lightmode.png",
   logoPathDark: "/rxd-darkmode.png",
-  faviconPath: "/rxd-darkmode.png",
+  faviconPath: "/radiant.ico",
   brandColor: "#356fdb",
   exampleNames: [
     { source: "bob.rxd", zone: "bob.rxd.zone" },
