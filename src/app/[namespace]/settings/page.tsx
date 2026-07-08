@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/table";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { getSession } from "@/lib/auth/session";
+import { isStepUpRequired } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db";
 import { getNamespace } from "@/lib/namespaces";
 import { formatRelativeTime } from "@/lib/utils";
+import { SecuritySettings } from "./security-settings";
 
 const ACTION_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
   CREATE: "default",
@@ -38,11 +40,14 @@ export default async function SettingsPage({
   const session = await getSession(ns.key);
   if (!session) redirect(`/${ns.key}/connect`);
 
-  const logs = await prisma.auditLog.findMany({
-    where: { namespace: ns.key, address: session.address },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  const [logs, requireSignedWrites] = await Promise.all([
+    prisma.auditLog.findMany({
+      where: { namespace: ns.key, address: session.address },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    isStepUpRequired(ns.key, session.address),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-10">
@@ -56,6 +61,20 @@ export default async function SettingsPage({
             {session.address}
           </span>
           <DisconnectButton namespace={ns.key} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Security</CardTitle>
+          <CardDescription>Extra protection for this address.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SecuritySettings
+            namespace={ns.key}
+            address={session.address}
+            initialEnabled={requireSignedWrites}
+          />
         </CardContent>
       </Card>
 

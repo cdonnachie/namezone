@@ -77,6 +77,7 @@ export default async function DnsManagementPage({
 
       <DnsManager
         namespace={ns.key}
+        address={session.address}
         name={auth.name}
         zone={sourceNameToBaseFqdn(auth.name, ns)}
         initialRecords={records.map((r) => ({

@@ -3,21 +3,38 @@ import { ZodError } from "zod";
 import { verifyRequestSchema } from "@/lib/api-schemas";
 import { getRequestMeta } from "@/lib/audit";
 import { verifyLoginChallenge } from "@/lib/auth/challenge";
-import { createSessionToken, setSessionCookie, SHORT_SESSION_DURATION_SECONDS } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
+import { createStepUpToken, setStepUpCookie } from "@/lib/auth/step-up";
 import { getNamespace, NamespaceNotFoundError } from "@/lib/namespaces";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+/**
+ * Mints the short-lived step-up cookie after verifying a FRESH wallet
+ * signature over a normal login challenge (same challenge/signature flow
+ * as sign-in, same single-use nonce store). Requires an active session for
+ * the same address - this endpoint elevates an existing session, it never
+ * creates one.
+ */
 export async function POST(req: Request, { params }: { params: Promise<{ namespace: string }> }) {
   try {
     const { namespace: key } = await params;
     const ns = getNamespace(key);
 
-    const json = await req.json();
-    const { address, message, signature, sharedComputer } = verifyRequestSchema.parse(json);
+    const session = await getSession(ns.key);
+    if (!session) {
+      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
 
-    // Per-address AND per-IP, for the same reason as the challenge route:
-    // the address alone is attacker-chosen and trivially rotated. See that
-    // route for the X-Forwarded-For caveats.
+    const json = await req.json();
+    const { address, message, signature } = verifyRequestSchema.parse(json);
+
+    if (address !== session.address) {
+      return NextResponse.json(
+        { error: "Step-up signature must be from the signed-in address." },
+        { status: 403 },
+      );
+    }
+
     const { ipAddress } = getRequestMeta(req);
     const [byAddress, byIp] = await Promise.all([
       checkRateLimit(`auth-verify:${ns.key}:${address}`, 10, 60_000),
@@ -35,14 +52,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ namespa
       return NextResponse.json({ error: result.error }, { status: 401 });
     }
 
-    const token = await createSessionToken(
-      ns.key,
-      result.address,
-      sharedComputer ? { durationSeconds: SHORT_SESSION_DURATION_SECONDS } : undefined,
-    );
-    await setSessionCookie(token, sharedComputer ? { browserSession: true } : undefined);
+    const token = await createStepUpToken(ns.key, address);
+    await setStepUpCookie(token);
 
-    return NextResponse.json({ address: result.address });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof NamespaceNotFoundError) {
       return NextResponse.json({ error: err.message }, { status: 404 });
@@ -50,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ namespa
     if (err instanceof ZodError) {
       return NextResponse.json({ error: err.issues[0]?.message ?? "Invalid request." }, { status: 400 });
     }
-    console.error("[api/auth/verify]", err);
+    console.error("[api/auth/step-up]", err);
     return NextResponse.json({ error: "Failed to verify signature." }, { status: 500 });
   }
 }

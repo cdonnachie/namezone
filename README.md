@@ -114,6 +114,24 @@ its own zone on it (`ns.dnsZone`, passed as a parameter to every `PowerDnsClient
 4. Every subsequent DNS API call re-checks, server-side, that the authenticated address
    currently owns the name being managed (`adapter.verifyOwner`) before touching PowerDNS.
 
+### Session hardening (shared computers & step-up)
+
+Two opt-in protections guard against a session left open on a public/shared machine (where an
+attacker has the cookie but not the wallet):
+
+- **"This is a shared computer"** at sign-in issues a 30-minute session in a browser-session
+  cookie (no `Max-Age`, so it also dies when the browser closes) instead of the usual 12-hour
+  persistent session — see `SHORT_SESSION_DURATION_SECONDS` in `src/lib/auth/session.ts`.
+- **"Require a fresh signature before changes"** (per-address setting on the Settings page,
+  stored in `AddressSetting.requireSignedWrites`) makes every DNS write additionally require a
+  short-lived *step-up* cookie, minted only after a fresh wallet signature via
+  `POST /api/[namespace]/auth/step-up` (valid 10 minutes — `src/lib/auth/step-up.ts`). Write
+  routes call `checkStepUpForWrite`, returning `403 STEP_UP_REQUIRED`; the client
+  (`StepUpProvider`) opens a confirm-with-wallet dialog and transparently retries. **Turning the
+  setting off** also requires a fresh signature, so a hijacked session can't simply disable it.
+  The step-up proof is a separate JWT cookie (not a DB timestamp) so it's bound to the browser
+  that actually signed and expires on its own.
+
 There is no standardized browser wallet extension for either chain today, so both
 `/avian/connect` and `/radiant/connect` offer a "Manual Verification" flow: sign the challenge
 with any wallet's Sign Message tool and paste the resulting signature back.

@@ -7,6 +7,7 @@ import { Check, Copy, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { StepUpProvider, useStepUp } from "@/components/step-up-provider";
 import {
   Card,
   CardContent,
@@ -109,6 +110,26 @@ type DeleteTarget =
 
 export function DnsManager({
   namespace,
+  address,
+  name,
+  zone,
+  initialRecords,
+}: {
+  namespace: string;
+  address: string;
+  name: string;
+  zone: string;
+  initialRecords: DnsRecordDto[];
+}) {
+  return (
+    <StepUpProvider namespace={namespace} address={address}>
+      <DnsManagerInner namespace={namespace} name={name} zone={zone} initialRecords={initialRecords} />
+    </StepUpProvider>
+  );
+}
+
+function DnsManagerInner({
+  namespace,
   name,
   zone,
   initialRecords,
@@ -118,6 +139,7 @@ export function DnsManager({
   zone: string;
   initialRecords: DnsRecordDto[];
 }) {
+  const runWithStepUp = useStepUp();
   const [records, setRecords] = useState<DnsRecordDto[]>(initialRecords);
   const [addOpen, setAddOpen] = useState(false);
   const [acmeOpen, setAcmeOpen] = useState(false);
@@ -362,20 +384,21 @@ export function DnsManager({
               onClick={async () => {
                 if (!deleting) return;
                 try {
-                  if (deleting.kind === "basic") {
-                    await deleteRecord(namespace, name, {
-                      hostname: deleting.record.relativeHost,
-                      type: deleting.record.type as BasicRecordType,
-                    });
-                  } else {
+                  await runWithStepUp(() => {
+                    if (deleting.kind === "basic") {
+                      return deleteRecord(namespace, name, {
+                        hostname: deleting.record.relativeHost,
+                        type: deleting.record.type as BasicRecordType,
+                      });
+                    }
                     // ACME relativeHost is stored as "_acme-challenge[.host]" -
                     // the API expects the target service host, so strip the prefix.
                     const targetHost = deleting.record.relativeHost.replace(/^_acme-challenge\.?/, "") || "@";
-                    await deleteAcmeChallenge(namespace, name, {
+                    return deleteAcmeChallenge(namespace, name, {
                       hostname: targetHost,
                       value: deleting.record.value,
                     });
-                  }
+                  });
                   removeLocal(deleting.record);
                   toast.success("DNS record deleted and synced");
                 } catch (err) {
@@ -407,6 +430,7 @@ function RecordDialogContent({
   existing: DnsRecordDto | null;
   onSaved: (record: DnsRecordDto) => void;
 }) {
+  const runWithStepUp = useStepUp();
   const [hostname, setHostname] = useState(existing?.relativeHost ?? "");
   const [type, setType] = useState<BasicRecordType>((existing?.type as BasicRecordType) ?? "A");
   const [value, setValue] = useState(existing?.value ?? "");
@@ -444,11 +468,13 @@ function RecordDialogContent({
 
     setSaving(true);
     try {
-      const { record } = await createOrUpdateRecord(namespace, name, {
-        hostname: hostResult.value,
-        type,
-        value: valueResult.value,
-      });
+      const { record } = await runWithStepUp(() =>
+        createOrUpdateRecord(namespace, name, {
+          hostname: hostResult.value,
+          type,
+          value: valueResult.value,
+        }),
+      );
       toast.success("DNS record saved and synced to PowerDNS");
       onSaved(record);
     } catch (err) {
@@ -550,6 +576,7 @@ function AcmeDialogContent({
   zone: string;
   onSaved: (record: DnsRecordDto) => void;
 }) {
+  const runWithStepUp = useStepUp();
   const [hostname, setHostname] = useState("@");
   const [value, setValue] = useState("");
   const [expiryHours, setExpiryHours] = useState(ACME_TXT_DEFAULT_EXPIRY_HOURS);
@@ -581,11 +608,13 @@ function AcmeDialogContent({
 
     setSaving(true);
     try {
-      const { record } = await createAcmeChallenge(namespace, name, {
-        hostname: hostResult.value,
-        value: valueResult.value,
-        expiryHours,
-      });
+      const { record } = await runWithStepUp(() =>
+        createAcmeChallenge(namespace, name, {
+          hostname: hostResult.value,
+          value: valueResult.value,
+          expiryHours,
+        }),
+      );
       toast.success("SSL challenge record created and synced to PowerDNS");
       onSaved(record);
     } catch (err) {

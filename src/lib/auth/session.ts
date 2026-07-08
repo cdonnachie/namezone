@@ -3,6 +3,10 @@ import { cookies } from "next/headers";
 
 export const SESSION_COOKIE_NAME = "ans_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 12; // 12 hours
+// "Shared computer" opt-in at sign-in: a much shorter JWT, held in a
+// browser-session cookie (no Max-Age) so it also dies when the browser
+// closes - for signing in on machines the user doesn't control.
+export const SHORT_SESSION_DURATION_SECONDS = 60 * 30; // 30 minutes
 
 function getSecretKey(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
@@ -21,11 +25,16 @@ export interface SessionPayload {
   namespace: string;
 }
 
-export async function createSessionToken(namespace: string, address: string): Promise<string> {
+export async function createSessionToken(
+  namespace: string,
+  address: string,
+  options?: { durationSeconds?: number },
+): Promise<string> {
+  const duration = options?.durationSeconds ?? SESSION_DURATION_SECONDS;
   return new SignJWT({ address, namespace })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_DURATION_SECONDS}s`)
+    .setExpirationTime(`${duration}s`)
     .sign(getSecretKey());
 }
 
@@ -56,14 +65,16 @@ export async function getSession(namespace: string): Promise<SessionPayload | nu
   return session;
 }
 
-export async function setSessionCookie(token: string): Promise<void> {
+export async function setSessionCookie(token: string, options?: { browserSession?: boolean }): Promise<void> {
   const store = await cookies();
   store.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_DURATION_SECONDS,
+    // browserSession: omit Max-Age so the cookie is dropped when the
+    // browser closes (the JWT's own exp still bounds it server-side).
+    ...(options?.browserSession ? {} : { maxAge: SESSION_DURATION_SECONDS }),
   });
 }
 

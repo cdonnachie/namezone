@@ -134,6 +134,22 @@ model AuditLog {
   @@index([namespace, address])
 }
 
+// Per-address, per-namespace security preferences. `requireSignedWrites`
+// is the opt-in step-up setting: when true, every DNS write additionally
+// requires a fresh wallet signature (a short-lived step-up cookie) on top
+// of the session - see src/lib/auth/step-up.ts. Disabling it requires a
+// fresh signature too, so a hijacked session can't simply switch it off.
+model AddressSetting {
+  id                  String   @id @default(cuid())
+  namespace           String
+  address             String
+  requireSignedWrites Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([namespace, address])
+}
+
 // Simple fixed-window rate limiting store, keyed by address + action bucket.
 model RateLimitBucket {
   id        String   @id @default(cuid())

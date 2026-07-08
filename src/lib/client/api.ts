@@ -34,15 +34,43 @@ export function requestChallenge(namespace: string, address: string) {
 export interface VerifyResponse {
   address: string;
 }
-export function verifyChallenge(namespace: string, address: string, message: string, signature: string) {
+export function verifyChallenge(
+  namespace: string,
+  address: string,
+  message: string,
+  signature: string,
+  options?: { sharedComputer?: boolean },
+) {
   return request<VerifyResponse>(`/api/${namespace}/auth/verify`, {
     method: "POST",
-    body: JSON.stringify({ address, message, signature }),
+    body: JSON.stringify({ address, message, signature, sharedComputer: options?.sharedComputer }),
   });
 }
 
 export function logout(namespace: string) {
   return request<{ ok: true }>(`/api/${namespace}/auth/logout`, { method: "POST" });
+}
+
+/** Machine-readable error body returned when a write needs a fresh signature. */
+export const STEP_UP_REQUIRED_ERROR = "STEP_UP_REQUIRED";
+
+/** Mints the short-lived step-up cookie from a fresh challenge signature. */
+export function stepUp(namespace: string, address: string, message: string, signature: string) {
+  return request<{ ok: true }>(`/api/${namespace}/auth/step-up`, {
+    method: "POST",
+    body: JSON.stringify({ address, message, signature }),
+  });
+}
+
+export function fetchSecuritySettings(namespace: string) {
+  return request<{ requireSignedWrites: boolean }>(`/api/${namespace}/settings`);
+}
+
+export function updateSecuritySettings(namespace: string, requireSignedWrites: boolean) {
+  return request<{ requireSignedWrites: boolean }>(`/api/${namespace}/settings`, {
+    method: "PUT",
+    body: JSON.stringify({ requireSignedWrites }),
+  });
 }
 
 export interface ClaimedNameSummary {

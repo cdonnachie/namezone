@@ -16,6 +16,9 @@ export const verifyRequestSchema = z.object({
   address: addressSchema,
   message: z.string().min(1).max(2000),
   signature: z.string().min(1).max(1000),
+  // "This is a shared computer": issue a 30-minute browser-session cookie
+  // instead of the persistent 12-hour session.
+  sharedComputer: z.boolean().optional(),
 });
 
 // Basic (non-ACME) record types creatable via the general Add Record flow.

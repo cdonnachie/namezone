@@ -3,6 +3,7 @@ import { handleApiError } from "@/lib/api-error";
 import { createRecordSchema, deleteRecordSchema } from "@/lib/api-schemas";
 import { getRequestMeta, recordAuditLog } from "@/lib/audit";
 import { getSession } from "@/lib/auth/session";
+import { checkStepUpForWrite } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db";
 import { FIXED_TTL } from "@/lib/dns/constants";
 import { checkRecordLimits, type ExistingBasicRecordSummary } from "@/lib/dns/limits";
@@ -47,6 +48,13 @@ export async function POST(
     const auth = await requireClaimedNameOwnership(ns, decodeURIComponent(rawName), session.address);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    // Opt-in step-up: addresses with requireSignedWrites need a fresh
+    // wallet signature (step-up cookie) on top of the session for writes.
+    const stepUp = await checkStepUpForWrite(ns.key, session.address);
+    if (!stepUp.ok) {
+      return NextResponse.json({ error: stepUp.error }, { status: stepUp.status });
     }
 
     const rateLimit = await checkRateLimit(`dns-write:${ns.key}:${session.address}`);
@@ -182,6 +190,13 @@ export async function DELETE(
     const auth = await requireClaimedNameOwnership(ns, decodeURIComponent(rawName), session.address);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    // Opt-in step-up: addresses with requireSignedWrites need a fresh
+    // wallet signature (step-up cookie) on top of the session for writes.
+    const stepUp = await checkStepUpForWrite(ns.key, session.address);
+    if (!stepUp.ok) {
+      return NextResponse.json({ error: stepUp.error }, { status: stepUp.status });
     }
 
     const rateLimit = await checkRateLimit(`dns-write:${ns.key}:${session.address}`);

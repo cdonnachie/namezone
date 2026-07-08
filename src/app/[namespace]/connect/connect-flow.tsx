@@ -60,6 +60,7 @@ function ManualVerification({
   const [address, setAddress] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
+  const [sharedComputer, setSharedComputer] = useState(false);
   const [loading, setLoading] = useState<"challenge" | "verify" | null>(null);
 
   async function handleRequestChallenge() {
@@ -79,7 +80,7 @@ function ManualVerification({
     if (!message) return;
     setLoading("verify");
     try {
-      await verifyChallenge(namespace, address.trim(), message, signature.trim());
+      await verifyChallenge(namespace, address.trim(), message, signature.trim(), { sharedComputer });
       toast.success("Ownership verified");
       // Full navigation, deliberately not router.push() + router.refresh():
       // refresh() can cancel the in-flight push (seen on mobile, where the
@@ -160,6 +161,22 @@ function ManualVerification({
               className="font-mono"
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={sharedComputer}
+              onChange={(e) => setSharedComputer(e.target.checked)}
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span>
+              This is a shared or public computer
+              <span className="block text-xs text-muted-foreground">
+                Sign me out after 30 minutes and when the browser closes, instead of the usual 12
+                hours.
+              </span>
+            </span>
+          </label>
 
           <div className="flex gap-2">
             <Button
