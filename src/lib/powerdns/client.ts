@@ -1,4 +1,4 @@
-import { FIXED_TTL } from "@/lib/dns/constants";
+import { FIXED_TTL, RESERVED_ROOT_HOSTS } from "@/lib/dns/constants";
 
 export class PowerDnsError extends Error {
   constructor(
@@ -115,7 +115,36 @@ export class PowerDnsClient {
     return this.request<PowerDnsZoneResponse>(`/zones/${zone}`);
   }
 
+  /**
+   * Last-line defense in depth, independent of the API layer's
+   * authorizeFqdnForName: no write leaving this client may ever touch the
+   * zone apex (SOA/NS/site records live there), a reserved operator
+   * hostname (ns1/ns2/www) or anything beneath one, or any name outside
+   * the zone being patched. Every legitimate write is to `<owner-name>.
+   * <zone>.` or deeper, so a violation here always means a bug (or bypass)
+   * upstream - throw loudly rather than let it reach PowerDNS.
+   */
+  private assertWritableNames(zone: string, rrsets: PowerDnsRRSet[]): void {
+    const zoneRoot = `${zone.toLowerCase().replace(/\.$/, "")}.`;
+    for (const rrset of rrsets) {
+      const name = rrset.name.toLowerCase();
+      if (name === zoneRoot) {
+        throw new PowerDnsError(`Refusing to write to zone apex "${rrset.name}".`);
+      }
+      if (!name.endsWith(`.${zoneRoot}`)) {
+        throw new PowerDnsError(`Refusing to write to "${rrset.name}" - outside zone "${zoneRoot}".`);
+      }
+      for (const host of RESERVED_ROOT_HOSTS) {
+        const reserved = `${host}.${zoneRoot}`;
+        if (name === reserved || name.endsWith(`.${reserved}`)) {
+          throw new PowerDnsError(`Refusing to write to reserved name "${rrset.name}".`);
+        }
+      }
+    }
+  }
+
   private async patchZone(zone: string, rrsets: PowerDnsRRSet[]): Promise<void> {
+    this.assertWritableNames(zone, rrsets);
     if (this.dryRun) {
       console.warn(
         `[powerdns:dry-run] POWERDNS_API_URL/POWERDNS_API_KEY not set — skipping real write to ${zone}:`,
