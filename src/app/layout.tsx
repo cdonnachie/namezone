@@ -1,18 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// Self-hosted from public/fonts via next/font/local (no Google Fonts fetch
+// at build time, so production builds work offline; the files get hashed
+// into _next/static and preloaded automatically). Inter everywhere (all
+// namespaces): 400 body, 500/600/700 for headings - see the base-layer
+// heading rule in globals.css. Named "--font-sans" directly because that's
+// the variable the Tailwind theme tokens (--font-sans/--font-heading in
+// globals.css) resolve to.
+const inter = localFont({
+  src: "../../public/fonts/InterVariable.woff2",
+  variable: "--font-sans",
+  weight: "100 900",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// Roboto Mono for addresses, DNS record values, and challenge messages
+// (latin-subset variable font - all mono content here is ASCII by
+// validation, so the subset is sufficient).
+const robotoMono = localFont({
+  src: "../../public/fonts/RobotoMonoVariable.woff2",
+  variable: "--font-mono",
+  weight: "100 700",
 });
 
 // Generic fallback metadata for the neutral portal ("/") and anything that
@@ -27,7 +39,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#19827a" },
-    { media: "(prefers-color-scheme: dark)", color: "#081613" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 
@@ -39,7 +51,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${robotoMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full">

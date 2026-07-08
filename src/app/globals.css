@@ -8,7 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -98,25 +98,31 @@
   --foreground: oklch(0.145 0 0);
 }
 
+/*
+ * Dark mode uses the same pure-black ladder as Radiant's (below) - black
+ * page/chrome, near-black cards, hairline borders - accented with Avian's
+ * mint instead of deep green surfaces. The near-blacks are green-tinted
+ * (#0a0d0c / #101614) where Radiant's are blue-tinted (#0a0a0d / #141418).
+ */
 .dark {
-  --sidebar: #04100d;
-  --background: #0a1e1a;
+  --sidebar: #000000;
+  --background: #000000;
   --foreground: #eafcf8;
-  --card: #15332e;
+  --card: #0a0d0c;
   --card-foreground: #eafcf8;
-  --popover: #15332e;
+  --popover: #0a0d0c;
   --popover-foreground: #eafcf8;
   --primary: #34f5c6;
   --primary-foreground: #052e29;
-  --secondary: #1c3d37;
+  --secondary: #101614;
   --secondary-foreground: #eafcf8;
-  --muted: #1c3d37;
-  --muted-foreground: #83aba5;
-  --accent: #1c3d37;
+  --muted: #101614;
+  --muted-foreground: #8fa8a2;
+  --accent: #101614;
   --accent-foreground: #eafcf8;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
   --ring: #34f5c6;
   --chart-1: #34f5c6;
   --chart-2: #34e2d5;
@@ -126,7 +132,7 @@
   --sidebar-foreground: #eafcf8;
   --sidebar-primary: #34f5c6;
   --sidebar-primary-foreground: #052e29;
-  --sidebar-accent: #1c3d37;
+  --sidebar-accent: #101614;
   --sidebar-accent-foreground: #eafcf8;
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: #34f5c6;
@@ -201,9 +207,24 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    /* Inter Regular 400 for body text */
+    @apply bg-background text-foreground font-normal;
   }
   html {
     @apply font-sans;
+  }
+  /*
+   * Headings default to Inter SemiBold 600; individual components step up
+   * to Bold 700 (font-bold - e.g. the landing hero) or down to Medium 500
+   * (font-medium - e.g. dialog/card titles) via utilities, which win over
+   * this base rule. Body stays Regular 400.
+   */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading font-semibold tracking-tight;
   }
 }
