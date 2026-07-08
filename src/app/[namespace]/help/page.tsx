@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getNamespace } from "@/lib/namespaces";
+import { HelpTabs } from "./help-tabs";
 
 export default async function HelpPage({
   params,
@@ -21,15 +22,8 @@ export default async function HelpPage({
   // inbox behind it) alive for as long as the zones are PSL-listed.
   const abuseEmail = process.env.ABUSE_CONTACT_EMAIL ?? "craig.donnachie@gmail.com";
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Help &amp; FAQ</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Plain-language answers for managing DNS on your {ns.chainName} name.
-        </p>
-      </div>
-
+  const basics = (
+    <>
       <Card>
         <CardHeader>
           <CardTitle>What is DNS?</CardTitle>
@@ -54,6 +48,34 @@ export default async function HelpPage({
         </CardHeader>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Why do changes take a moment to appear?</CardTitle>
+          <CardDescription>
+            Every record here has a 300-second (5 minute) TTL (&quot;time to live&quot;) - that&apos;s
+            how long other DNS servers around the internet are allowed to cache your old answer
+            before checking again. After saving a change, it can take up to five minutes to be
+            visible everywhere.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Who can change my records?</CardTitle>
+          <CardDescription>
+            Only the current on-chain owner of a {ns.chainName} name can manage its DNS here -
+            every write is checked against live {ns.chainName} ownership first. If the name is
+            ever transferred to a new owner, the previous owner&apos;s records are disabled
+            automatically and the new owner starts with a clean slate.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </>
+  );
+
+  const records = (
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Record types</CardTitle>
@@ -109,31 +131,98 @@ export default async function HelpPage({
           </p>
         </CardContent>
       </Card>
+    </>
+  );
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Why do changes take a moment to appear?</CardTitle>
-          <CardDescription>
-            Every record here has a 300-second (5 minute) TTL (&quot;time to live&quot;) - that&apos;s
-            how long other DNS servers around the internet are allowed to cache your old answer
-            before checking again. After saving a change, it can take up to five minutes to be
-            visible everywhere.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+  const security = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Building a site on your subdomain? Read this first</CardTitle>
+        <CardDescription>
+          Every subdomain under {ns.dnsZone} is run by a different, independent name owner.
+          Browsers use the{" "}
+          <a
+            href="https://publicsuffix.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary underline underline-offset-4"
+          >
+            Public Suffix List
+          </a>{" "}
+          to decide where one &quot;site&quot; ends and the next begins - we have applied to
+          have {ns.dnsZone} listed, but until that lands, browsers treat all of{" "}
+          {ns.dnsZone} as one site. If your subdomain hosts anything with logins or sessions,
+          follow these rules.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <div>
+          <p className="font-medium">
+            Never set a <code className="font-mono">Domain=</code> cookie
+          </p>
+          <p className="text-muted-foreground">
+            A cookie scoped to the parent domain is readable and settable by{" "}
+            <em>every other subdomain owner</em>. Don&apos;t do this:
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            {`Set-Cookie: session=abc123; Domain=.${ns.dnsZone}   # NEVER - shared with everyone`}
+          </pre>
+        </div>
+        <div>
+          <p className="font-medium">
+            Use <code className="font-mono">__Host-</code> prefixed cookies
+          </p>
+          <p className="text-muted-foreground">
+            The <code className="font-mono">__Host-</code> prefix makes the browser itself
+            enforce that the cookie belongs to your hostname only - other subdomains can
+            neither read it nor plant a lookalike that shadows yours. This works today, with
+            or without the PSL:
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            {`Set-Cookie: __Host-session=abc123; Path=/; Secure; HttpOnly; SameSite=Lax`}
+          </pre>
+        </div>
+        <div>
+          <p className="font-medium">Don&apos;t rely on SameSite alone for CSRF protection</p>
+          <p className="text-muted-foreground">
+            Until the PSL listing lands, a request from any other {ns.dnsZone} subdomain
+            counts as &quot;same-site&quot; to the browser, so{" "}
+            <code className="font-mono">SameSite=Lax/Strict</code> won&apos;t block it. If
+            your site has state-changing endpoints, also verify a CSRF token or check the{" "}
+            <code className="font-mono">Origin</code> header against your exact hostname.
+          </p>
+        </div>
+        <div>
+          <p className="font-medium">What&apos;s already safe</p>
+          <p className="text-muted-foreground">
+            <code className="font-mono">localStorage</code>,{" "}
+            <code className="font-mono">sessionStorage</code>, and IndexedDB are scoped to
+            your exact hostname and are already isolated from other subdomains. And treat
+            neighbouring subdomains the way you&apos;d treat any unrelated website - they
+            belong to other people.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Once {ns.dnsZone} is accepted onto the Public Suffix List, browsers will enforce
+          this isolation automatically - these practices are still good hygiene afterwards.
+        </p>
+      </CardContent>
+    </Card>
+  );
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Who can change my records?</CardTitle>
-          <CardDescription>
-            Only the current on-chain owner of a {ns.chainName} name can manage its DNS here -
-            every write is checked against live {ns.chainName} ownership first. If the name is
-            ever transferred to a new owner, the previous owner&apos;s records are disabled
-            automatically and the new owner starts with a clean slate.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+  return (
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Help &amp; FAQ</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Plain-language answers for managing DNS on your {ns.chainName} name.
+        </p>
+      </div>
 
+      <HelpTabs basics={basics} records={records} security={security} />
+
+      {/* Deliberately outside the tabs: /help#abuse is the abuse-contact URL
+          cited in the Public Suffix List PR and must always be visible. */}
       <Card id="abuse">
         <CardHeader>
           <CardTitle>Report abuse</CardTitle>

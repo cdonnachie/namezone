@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ShieldCheck, Lock, Globe2, Ban } from "lucide-react";
+import { ArrowRight, ShieldCheck, Lock, Globe2, Ban, ShieldAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { NamespaceLogo } from "@/components/namespace-logo";
@@ -89,6 +90,25 @@ export default async function NamespaceLandingPage({
             </div>
           </CardContent>
         </Card>
+      </section>
+
+      <section className="pb-16">
+        <Alert className="border-primary/30 bg-primary/10 p-4 has-[>svg]:gap-x-3 [&>svg]:text-primary">
+          <ShieldAlert className="size-12 self-center" />
+          <AlertTitle>Building something with logins on your subdomain?</AlertTitle>
+          <AlertDescription>
+            Until {ns.dnsZone} is on the Public Suffix List, browsers treat all its subdomains
+            as one &quot;site&quot; - so cookies need extra care. It&apos;s two rules, and they&apos;re
+            easy:{" "}
+            <Link
+              href={`/${ns.key}/help#security`}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              read the security guide
+            </Link>
+            .
+          </AlertDescription>
+        </Alert>
       </section>
 
       <section className="grid gap-4 pb-24 sm:grid-cols-2 lg:grid-cols-4">
