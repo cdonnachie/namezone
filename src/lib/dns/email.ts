@@ -72,8 +72,13 @@ function validateTxtBasics(raw: string): ValidationResult<string> {
 
 /**
  * Validates an email TXT value against the shape its hostname implies.
- * Free-form TXT is deliberately impossible - every value must be a
- * well-formed SPF policy, DKIM key, or DMARC policy.
+ * DMARC/DKIM hosts are shape-checked (they have exactly one correct form);
+ * a plain host accepts SPF plus the provider verification tokens email
+ * onboarding needs (Migadu `hosted-email-verify=`, Google
+ * `google-site-verification=`, Microsoft `MS=`, etc.) - too many formats to
+ * allowlist, and email names are operator-trusted via EMAIL_ALLOWED_NAMES,
+ * so the plain host is permissive with only misplacement nudges. (Non-
+ * allowlisted names still can't create TXT here at all - see the route.)
  */
 export function validateEmailTxtValue(host: string, raw: string): ValidationResult<string> {
   const basics = validateTxtBasics(raw);
@@ -93,11 +98,13 @@ export function validateEmailTxtValue(host: string, raw: string): ValidationResu
     }
     return ok(value);
   }
-  // SPF at a plain hostname.
-  if (!/^v=spf1(\s|$)/i.test(value)) {
-    return fail(
-      'Only SPF policies are allowed as plain TXT records here (must start with "v=spf1"). DMARC goes under "_dmarc", DKIM under "<selector>._domainkey".',
-    );
+  // Plain host: SPF, provider verification tokens, and other email-setup
+  // TXT are all allowed. Nudge the two records that belong elsewhere.
+  if (/^v=DMARC1/i.test(value)) {
+    return fail('DMARC records must be placed under "_dmarc".');
+  }
+  if (/^v=DKIM1/i.test(value)) {
+    return fail('DKIM records must be placed under "<selector>._domainkey".');
   }
   return ok(value);
 }

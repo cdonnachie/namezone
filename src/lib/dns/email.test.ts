@@ -54,9 +54,17 @@ describe("validateEmailTxtValue", () => {
     expect(validateEmailTxtValue("@", "v=spf1 include:example.com -all").ok).toBe(true);
   });
 
-  it("rejects free-form TXT at a plain host (must be SPF)", () => {
-    const r = validateEmailTxtValue("@", "hello world");
-    expect(r.ok).toBe(false);
+  it("accepts provider verification tokens at a plain host", () => {
+    // Onboarding TXT records from real providers - too many formats to allowlist.
+    expect(validateEmailTxtValue("@", "hosted-email-verify=dgp5a3zt").ok).toBe(true); // Migadu
+    expect(validateEmailTxtValue("@", "google-site-verification=abc123").ok).toBe(true);
+    expect(validateEmailTxtValue("@", "MS=ms12345678").ok).toBe(true); // Microsoft
+    expect(validateEmailTxtValue("@", "zoho-verification=zb123.zmverify.zoho.com").ok).toBe(true);
+  });
+
+  it("nudges DMARC/DKIM records placed at a plain host to their correct host", () => {
+    expect(validateEmailTxtValue("@", "v=DMARC1; p=reject").ok).toBe(false);
+    expect(validateEmailTxtValue("@", "v=DKIM1; k=rsa; p=MIGf...").ok).toBe(false);
   });
 
   it("requires v=DMARC1 under _dmarc", () => {

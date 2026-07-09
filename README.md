@@ -216,11 +216,14 @@ For an allowlisted name, the general Add Record flow additionally offers:
 - **MX** — `"<priority> <mail-host>"` (e.g. `10 mail.example.com`). Target validated like a CNAME
   target: a real hostname, not an IP/localhost, and if it falls inside our own zone it must stay
   within the caller's namespace.
-- **TXT**, shape-validated by hostname so free-form TXT remains impossible: `v=spf1 …` at a plain
-  host, `v=DMARC1; …` only under `_dmarc`, DKIM `p=…` only under `<selector>._domainkey`. The two
-  underscore host shapes are the only additions to the underscore-label ban (which otherwise
-  still blocks everything but `_acme-challenge`). DKIM public keys longer than a single 255-byte
-  DNS string are automatically split into multiple quoted strings.
+- **TXT**, host-guided: `v=DMARC1; …` only under `_dmarc` and DKIM `p=…` only under
+  `<selector>._domainkey` (both shape-checked); a plain host takes SPF plus the provider
+  verification tokens onboarding needs (`hosted-email-verify=`, `google-site-verification=`,
+  `MS=`, …) — too many formats to allowlist, and email names are operator-trusted, so the plain
+  host is permissive (non-allowlisted names still can't create any TXT here). The two underscore
+  host shapes are the only additions to the underscore-label ban (which otherwise still blocks
+  everything but `_acme-challenge`). DKIM public keys longer than a single 255-byte DNS string
+  are automatically split into multiple quoted strings.
 
 Everything else still applies unchanged: the record is still ownership-checked, still can't touch
 the apex/reserved names (`ns1`/`ns2`/`www`) or another owner's zone, still passes through the

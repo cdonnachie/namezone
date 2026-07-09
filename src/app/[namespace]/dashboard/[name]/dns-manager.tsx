@@ -589,7 +589,9 @@ function RecordDialogContent({
           )}
           {type === "TXT" && (
             <p className="text-xs text-muted-foreground">
-              SPF at a normal host, DMARC under <span className="font-mono">_dmarc</span>, DKIM under{" "}
+              At a normal host: SPF or your provider&apos;s verification record (e.g.{" "}
+              <span className="font-mono">hosted-email-verify=…</span>). DMARC under{" "}
+              <span className="font-mono">_dmarc</span>, DKIM under{" "}
               <span className="font-mono">&lt;selector&gt;._domainkey</span>.
             </p>
           )}
