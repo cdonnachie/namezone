@@ -294,8 +294,10 @@ ever change.
 - Empty labels, double dots, labels over 63 chars, and full names over 253 chars are rejected.
 - A/AAAA/CNAME records use a fixed TTL of 300 seconds; ACME TXT records use a short 60s TTL and
   an expiry (default 24h, max 7 days).
-- Per-name limits: max 10 hostnames, max 2 A/AAAA records per hostname (one A + one AAAA)
-  or 1 CNAME (mutually exclusive with A/AAAA), max 10 active ACME TXT challenges.
+- Per-name limits: max 10 hostnames; per hostname either a single CNAME, or a mix of up to 4 A +
+  4 AAAA (multiple IPs for apex hosts like GitHub Pages) plus (for email-allowlisted names) up to
+  5 MX and 10 email TXT; max 10 active ACME TXT challenges. A CNAME is mutually exclusive with all
+  other types at the same hostname.
 - **On ownership transfer**, every DNS record for that name is disabled (removed from PowerDNS,
   kept locally only for audit history) before the new owner can manage anything - see
   "Ownership transfer handling" below.

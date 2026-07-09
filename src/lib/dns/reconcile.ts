@@ -169,9 +169,10 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
   });
 
-  // TXT and MX are multi-value (many values per fqdn+type); A/AAAA/CNAME are
-  // single-value (one per fqdn+type).
-  const isMultiValueType = (t: string) => t === "TXT" || t === "MX";
+  // Everything except CNAME is multi-value (many values per fqdn+type):
+  // A/AAAA (multiple IPs), MX, TXT. CNAME is the only single-value type (RFC:
+  // a CNAME node holds exactly one, and nothing else).
+  const isMultiValueType = (t: string) => t !== "CNAME";
   const liveSingle = liveRecords.filter((r) => !isMultiValueType(r.type));
   const liveMulti = liveRecords.filter((r) => isMultiValueType(r.type));
 

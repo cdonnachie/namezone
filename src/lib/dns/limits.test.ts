@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkAcmeTxtLimit, checkRecordLimits, type ExistingBasicRecordSummary } from "./limits";
-import { MAX_ACME_TXT_RECORDS, MAX_HOSTNAMES_PER_NAME, MAX_RECORDS_PER_HOSTNAME } from "./constants";
+import { MAX_ACME_TXT_RECORDS, MAX_HOSTNAMES_PER_NAME } from "./constants";
 
 function makeRecords(hostCount: number, perHost: 1 | 2 = 1): ExistingBasicRecordSummary[] {
   const records: ExistingBasicRecordSummary[] = [];
@@ -23,33 +23,26 @@ describe("checkRecordLimits", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("allows replacing an existing record's value even at the hostname limit", () => {
+  it("allows adding another value to a hostname at the hostname limit (not a new host)", () => {
     const existing = makeRecords(MAX_HOSTNAMES_PER_NAME);
     const result = checkRecordLimits(existing, { relativeHost: "host0", type: "A" });
     expect(result.ok).toBe(true);
   });
 
-  it("allows adding the second record type (AAAA) to a hostname that only has an A record", () => {
+  it("allows adding AAAA to a hostname that only has an A record", () => {
     const existing = makeRecords(1, 1); // host0 has only an A record
     const result = checkRecordLimits(existing, { relativeHost: "host0", type: "AAAA" });
     expect(result.ok).toBe(true);
   });
 
-  it(`rejects a genuinely new type once a hostname has ${MAX_RECORDS_PER_HOSTNAME} records`, () => {
-    // host0 already has both A and AAAA (the max); replacing either is fine,
-    // but there is no third A/AAAA slot to add.
+  it("allows multiple A records on one hostname (per-value caps live in the route now)", () => {
+    // checkRecordLimits no longer caps how many A/AAAA/MX/TXT values coexist -
+    // that's enforced with the actual values in the records route.
     const existing: ExistingBasicRecordSummary[] = [
-      { relativeHost: "host0", type: "A" },
-      { relativeHost: "host0", type: "AAAA" },
+      { relativeHost: "@", type: "A" },
+      { relativeHost: "@", type: "A" },
     ];
-    const replace = checkRecordLimits(existing, { relativeHost: "host0", type: "A" });
-    expect(replace.ok).toBe(true);
-  });
-
-  it("rejects a genuinely new hostname+type once total is effectively capped", () => {
-    const existing = makeRecords(MAX_HOSTNAMES_PER_NAME, 2);
-    const newHost = checkRecordLimits(existing, { relativeHost: "brand-new", type: "A" });
-    expect(newHost.ok).toBe(false);
+    expect(checkRecordLimits(existing, { relativeHost: "@", type: "A" }).ok).toBe(true);
   });
 
   it("rejects adding a CNAME to a hostname that already has an A/AAAA record", () => {
@@ -93,7 +86,7 @@ describe("checkRecordLimits", () => {
     expect(checkRecordLimits(existing, { relativeHost: "@", type: "TXT" }).ok).toBe(true);
   });
 
-  it("MX/TXT do not count against the one-A-one-AAAA address limit", () => {
+  it("allows a full apex mix (A + AAAA + MX + TXT) to grow, gated only by CNAME exclusivity", () => {
     const existing: ExistingBasicRecordSummary[] = [
       { relativeHost: "@", type: "A" },
       { relativeHost: "@", type: "MX" },

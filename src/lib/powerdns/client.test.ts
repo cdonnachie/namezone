@@ -64,7 +64,7 @@ describe("multi-value MX rrset", () => {
       body = JSON.parse(String(init?.body));
       return new Response(null, { status: 204 });
     }));
-    await live.upsertMxRecords("rxd.zone", "craigd.rxd.zone.", ["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."], 300);
+    await live.upsertRawRecordSet("rxd.zone", "craigd.rxd.zone.", "MX", ["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."], 300);
     expect(body?.rrsets[0].type).toBe("MX");
     expect(body?.rrsets[0].changetype).toBe("REPLACE");
     expect(body?.rrsets[0].records.map((r) => r.content)).toEqual(["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."]);
@@ -77,7 +77,7 @@ describe("multi-value MX rrset", () => {
       body = JSON.parse(String(init?.body));
       return new Response(null, { status: 204 });
     }));
-    await live.upsertMxRecords("rxd.zone", "craigd.rxd.zone.", [], 300);
+    await live.upsertRawRecordSet("rxd.zone", "craigd.rxd.zone.", "MX", [], 300);
     expect(body?.rrsets[0].changetype).toBe("DELETE");
     vi.unstubAllGlobals();
   });

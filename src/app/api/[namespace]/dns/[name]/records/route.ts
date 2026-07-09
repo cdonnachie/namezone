@@ -5,7 +5,20 @@ import { getRequestMeta, recordAuditLog } from "@/lib/audit";
 import { getSession } from "@/lib/auth/session";
 import { checkStepUpForWrite } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db";
-import { FIXED_TTL, MAX_EMAIL_TXT_PER_HOSTNAME, MAX_MX_PER_HOSTNAME } from "@/lib/dns/constants";
+import {
+  FIXED_TTL,
+  MAX_ADDRESS_RECORDS_PER_HOSTNAME,
+  MAX_EMAIL_TXT_PER_HOSTNAME,
+  MAX_MX_PER_HOSTNAME,
+} from "@/lib/dns/constants";
+
+/** Per-type cap on how many values may coexist at one hostname (rrset). */
+const RRSET_MAX: Record<"A" | "AAAA" | "MX" | "TXT", number> = {
+  A: MAX_ADDRESS_RECORDS_PER_HOSTNAME,
+  AAAA: MAX_ADDRESS_RECORDS_PER_HOSTNAME,
+  MX: MAX_MX_PER_HOSTNAME,
+  TXT: MAX_EMAIL_TXT_PER_HOSTNAME,
+};
 import { checkRecordLimits, type ExistingBasicRecordSummary } from "@/lib/dns/limits";
 import {
   authorizeFqdnForName,
@@ -173,11 +186,12 @@ export async function POST(
     const pdns = getPowerDnsClient();
     const { ipAddress, userAgent } = getRequestMeta(req);
 
-    // MX and email TXT are MULTI-VALUE per hostname: several MX hosts, or SPF
-    // alongside multiple provider verification tokens, coexist at one name.
-    // Adding one must preserve the others, so we rewrite the whole rrset with
-    // the union of existing active values plus this one.
-    if (type === "MX" || type === "TXT") {
+    // A/AAAA, MX and email TXT are MULTI-VALUE per hostname: several apex IPs
+    // (GitHub Pages), 2+ MX hosts, or SPF alongside multiple verification
+    // tokens all coexist at one name. Adding one must preserve the others, so
+    // we rewrite the whole rrset with the union of existing active values plus
+    // this one. (CNAME is single-value and handled below.)
+    if (type === "A" || type === "AAAA" || type === "MX" || type === "TXT") {
       const activeAtRrset = await prisma.dnsRecord.findMany({
         where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false },
       });
@@ -195,21 +209,18 @@ export async function POST(
         );
       }
 
-      if (!alreadyActive) {
-        const max = type === "MX" ? MAX_MX_PER_HOSTNAME : MAX_EMAIL_TXT_PER_HOSTNAME;
-        if (activeAtRrset.length >= max) {
-          return NextResponse.json(
-            { error: `Maximum of ${max} ${type} records per hostname reached.` },
-            { status: 400 },
-          );
-        }
+      if (!alreadyActive && activeAtRrset.length >= RRSET_MAX[type]) {
+        return NextResponse.json(
+          { error: `Maximum of ${RRSET_MAX[type]} ${type} records per hostname reached.` },
+          { status: 400 },
+        );
       }
 
       const valueSet = Array.from(new Set([...activeAtRrset.map((r) => r.value), storedValue]));
       if (type === "TXT") {
         await pdns.upsertTxtRecords(ns.dnsZone, fqdn, valueSet, FIXED_TTL);
       } else {
-        await pdns.upsertMxRecords(ns.dnsZone, fqdn, valueSet, FIXED_TTL);
+        await pdns.upsertRawRecordSet(ns.dnsZone, fqdn, type, valueSet, FIXED_TTL);
       }
       await pdns.notify(ns.dnsZone);
 
@@ -238,9 +249,9 @@ export async function POST(
       return NextResponse.json({ record: saved }, { status: isFresh ? 201 : 200 });
     }
 
-    // Single-value A/AAAA/CNAME. Look up regardless of status: a DISABLED row
-    // at this exact (fqdn, type) - e.g. left over from a prior ownership
-    // transfer - gets reactivated in place rather than blocked by the
+    // Single-value CNAME. Look up regardless of status: a DISABLED row at this
+    // exact (fqdn, type) - e.g. left over from a prior ownership transfer -
+    // gets reactivated in place rather than blocked by the
     // (namespace, fqdn, type, value) unique constraint.
     const existingRecord = await prisma.dnsRecord.findFirst({ where: { namespace: ns.key, fqdn, type } });
     const isFreshFromUserPerspective = !existingRecord || existingRecord.status === "DISABLED";
@@ -342,12 +353,12 @@ export async function DELETE(
     const pdns = getPowerDnsClient();
     const { ipAddress, userAgent } = getRequestMeta(req);
 
-    // Multi-value MX / email TXT: a `value` picks which one to remove; the
-    // rest of the rrset must survive, so rewrite it with the remaining
-    // values (never delete ACME TXT here - that's the ACME route's job).
-    if (type === "MX" || type === "TXT") {
+    // Multi-value A/AAAA/MX/TXT: a `value` picks which one to remove; the rest
+    // of the rrset must survive, so rewrite it with the remaining values
+    // (never delete ACME TXT here - that's the ACME route's job).
+    if (type === "A" || type === "AAAA" || type === "MX" || type === "TXT") {
       if (!body.value) {
-        return NextResponse.json({ error: "A value is required to delete an MX or TXT record." }, { status: 400 });
+        return NextResponse.json({ error: `A value is required to delete an ${type} record.` }, { status: 400 });
       }
       const target = await prisma.dnsRecord.findFirst({
         where: { namespace: ns.key, fqdn, type, value: body.value, status: "ACTIVE", isAcmeChallenge: false },
@@ -362,7 +373,7 @@ export async function DELETE(
       if (type === "TXT") {
         await pdns.upsertTxtRecords(ns.dnsZone, fqdn, remainingValues, FIXED_TTL);
       } else {
-        await pdns.upsertMxRecords(ns.dnsZone, fqdn, remainingValues, FIXED_TTL);
+        await pdns.upsertRawRecordSet(ns.dnsZone, fqdn, type, remainingValues, FIXED_TTL);
       }
       await pdns.notify(ns.dnsZone);
       await prisma.dnsRecord.delete({ where: { id: target.id } });
@@ -382,7 +393,7 @@ export async function DELETE(
       return NextResponse.json({ ok: true });
     }
 
-    // Single-value A/AAAA/CNAME.
+    // Single-value CNAME.
     const existingRecord = await prisma.dnsRecord.findFirst({
       where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false },
     });

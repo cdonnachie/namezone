@@ -217,19 +217,27 @@ export class PowerDnsClient {
   }
 
   /**
-   * Replaces the entire MX rrset at `fqdn` with exactly `values`, each an
-   * already-formatted "<priority> <target>." rdata string. MX is multi-value
-   * (mail providers publish 2+ MX hosts). Empty array deletes the rrset.
+   * Replaces the entire rrset at `fqdn` with exactly `values` for a raw
+   * (non-TXT) multi-value type - A/AAAA (multiple IPs, e.g. GitHub Pages'
+   * four apex records) or MX (2+ mail hosts, already formatted as
+   * "<priority> <target>."). Empty array deletes the rrset. TXT has its own
+   * quoted/chunked writer (upsertTxtRecords).
    */
-  async upsertMxRecords(zone: string, fqdn: string, values: string[], ttl: number = FIXED_TTL): Promise<void> {
+  async upsertRawRecordSet(
+    zone: string,
+    fqdn: string,
+    type: "A" | "AAAA" | "MX",
+    values: string[],
+    ttl: number = FIXED_TTL,
+  ): Promise<void> {
     if (values.length === 0) {
-      await this.deleteRecord(zone, fqdn, "MX");
+      await this.deleteRecord(zone, fqdn, type);
       return;
     }
     await this.patchZone(zone, [
       {
         name: fqdn,
-        type: "MX",
+        type,
         ttl,
         changetype: "REPLACE",
         records: values.map((v) => ({ content: v, disabled: false })),

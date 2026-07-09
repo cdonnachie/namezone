@@ -64,10 +64,12 @@ export const ACME_TXT_DEFAULT_EXPIRY_HOURS = 24;
 export const ACME_TXT_MAX_EXPIRY_HOURS = 24 * 7;
 
 export const MAX_HOSTNAMES_PER_NAME = 10;
-export const MAX_RECORDS_PER_HOSTNAME = 2; // one A + one AAAA; a CNAME instead takes the whole slot
 export const MAX_ACME_TXT_RECORDS = 10; // active (non-expired) ACME TXT records per source name
-// MX and email TXT are multi-value per hostname (e.g. Migadu's aspmx1/aspmx2;
-// SPF alongside several provider verification tokens) - see the records route.
+// Multi-value per hostname (values coexist at one fqdn+type), each capped
+// per type - see the records route. A/AAAA allow up to 4 each so apex hosts
+// like GitHub Pages (four A records) work; MX for providers publishing 2+
+// mail hosts; email TXT for SPF alongside several verification tokens.
+export const MAX_ADDRESS_RECORDS_PER_HOSTNAME = 4; // per type: up to 4 A and 4 AAAA
 export const MAX_MX_PER_HOSTNAME = 5;
 export const MAX_EMAIL_TXT_PER_HOSTNAME = 10;
 
