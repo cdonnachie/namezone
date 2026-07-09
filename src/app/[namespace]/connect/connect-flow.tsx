@@ -211,8 +211,9 @@ function ManualVerification({
             <span>
               This is a shared or public computer
               <span className="block text-xs text-muted-foreground">
-                Sign me out after 30 minutes and when the browser closes, instead of the usual 12
-                hours.
+                Limit this sign-in to 30 minutes instead of the usual 12 hours. (It also ends
+                when the browser fully exits, though some browsers restore sessions on restart -
+                the 30-minute limit always applies.)
               </span>
             </span>
           </label>
