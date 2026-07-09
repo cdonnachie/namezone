@@ -125,7 +125,7 @@ function ManualVerification({
               <Label>Challenge message</Label>
               <CopyButton value={message} />
             </div>
-            <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            <pre className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
               {message}
             </pre>
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
