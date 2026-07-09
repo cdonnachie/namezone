@@ -217,6 +217,27 @@ export class PowerDnsClient {
   }
 
   /**
+   * Replaces the entire MX rrset at `fqdn` with exactly `values`, each an
+   * already-formatted "<priority> <target>." rdata string. MX is multi-value
+   * (mail providers publish 2+ MX hosts). Empty array deletes the rrset.
+   */
+  async upsertMxRecords(zone: string, fqdn: string, values: string[], ttl: number = FIXED_TTL): Promise<void> {
+    if (values.length === 0) {
+      await this.deleteRecord(zone, fqdn, "MX");
+      return;
+    }
+    await this.patchZone(zone, [
+      {
+        name: fqdn,
+        type: "MX",
+        ttl,
+        changetype: "REPLACE",
+        records: values.map((v) => ({ content: v, disabled: false })),
+      },
+    ]);
+  }
+
+  /**
    * Replaces the entire TXT rrset at `fqdn` with exactly `values` (each
    * quoted/escaped per DNS TXT rdata format). Used for ACME challenges,
    * which may need multiple concurrent values at the same name. Passing an

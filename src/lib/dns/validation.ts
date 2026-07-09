@@ -366,8 +366,10 @@ export function validateCnameTarget(
     if (label.length > 63) return fail(`CNAME target label "${label}" exceeds 63 characters.`);
     // Deliberately more permissive than isValidDnsLabel: this is an external
     // hostname we don't control, and real-world targets legitimately use
-    // underscores (e.g. some CDN verification subdomains).
-    if (!/^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/.test(label)) {
+    // underscores anywhere in a label, including leading - e.g. DKIM-CNAME
+    // delegation like "key1._domainkey.migadu.com." or "_acme-challenge.*"
+    // CNAME setups.
+    if (!/^[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?$/.test(label)) {
       return fail(`CNAME target label "${label}" is not a valid hostname label.`);
     }
   }

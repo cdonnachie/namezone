@@ -5,7 +5,7 @@ import { getRequestMeta, recordAuditLog } from "@/lib/audit";
 import { getSession } from "@/lib/auth/session";
 import { checkStepUpForWrite } from "@/lib/auth/step-up";
 import { prisma } from "@/lib/db";
-import { FIXED_TTL } from "@/lib/dns/constants";
+import { FIXED_TTL, MAX_EMAIL_TXT_PER_HOSTNAME, MAX_MX_PER_HOSTNAME } from "@/lib/dns/constants";
 import { checkRecordLimits, type ExistingBasicRecordSummary } from "@/lib/dns/limits";
 import {
   authorizeFqdnForName,
@@ -170,20 +170,82 @@ export async function POST(
       return NextResponse.json({ error: limitResult.error }, { status: 400 });
     }
 
-    // Look up regardless of status: a DISABLED row at this exact (fqdn, type)
-    // - e.g. left over from a prior ownership transfer - gets reactivated in
-    // place rather than blocked by the (namespace, fqdn, type, value) unique constraint.
+    const pdns = getPowerDnsClient();
+    const { ipAddress, userAgent } = getRequestMeta(req);
+
+    // MX and email TXT are MULTI-VALUE per hostname: several MX hosts, or SPF
+    // alongside multiple provider verification tokens, coexist at one name.
+    // Adding one must preserve the others, so we rewrite the whole rrset with
+    // the union of existing active values plus this one.
+    if (type === "MX" || type === "TXT") {
+      const activeAtRrset = await prisma.dnsRecord.findMany({
+        where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false },
+      });
+      const existingRow = await prisma.dnsRecord.findFirst({
+        where: { namespace: ns.key, fqdn, type, value: storedValue },
+      });
+      const alreadyActive = activeAtRrset.some((r) => r.value === storedValue);
+
+      // Only one SPF record per host is valid (RFC 7208); a second silently
+      // breaks SPF, so reject rather than let it through.
+      if (type === "TXT" && /^v=spf1/i.test(storedValue) && activeAtRrset.some((r) => /^v=spf1/i.test(r.value) && r.value !== storedValue)) {
+        return NextResponse.json(
+          { error: "This hostname already has an SPF record; remove it before adding another." },
+          { status: 400 },
+        );
+      }
+
+      if (!alreadyActive) {
+        const max = type === "MX" ? MAX_MX_PER_HOSTNAME : MAX_EMAIL_TXT_PER_HOSTNAME;
+        if (activeAtRrset.length >= max) {
+          return NextResponse.json(
+            { error: `Maximum of ${max} ${type} records per hostname reached.` },
+            { status: 400 },
+          );
+        }
+      }
+
+      const valueSet = Array.from(new Set([...activeAtRrset.map((r) => r.value), storedValue]));
+      if (type === "TXT") {
+        await pdns.upsertTxtRecords(ns.dnsZone, fqdn, valueSet, FIXED_TTL);
+      } else {
+        await pdns.upsertMxRecords(ns.dnsZone, fqdn, valueSet, FIXED_TTL);
+      }
+      await pdns.notify(ns.dnsZone);
+
+      const isFresh = !existingRow || existingRow.status === "DISABLED";
+      const saved = existingRow
+        ? await prisma.dnsRecord.update({
+            where: { id: existingRow.id },
+            data: { ttl: FIXED_TTL, relativeHost: host, status: "ACTIVE", disabledReason: null },
+          })
+        : await prisma.dnsRecord.create({
+            data: { namespace: ns.key, claimedName: auth.name, fqdn, relativeHost: host, type, value: storedValue, ttl: FIXED_TTL },
+          });
+
+      await recordAuditLog({
+        namespace: ns.key,
+        address: session.address,
+        claimedName: auth.name,
+        action: isFresh ? "CREATE" : "UPDATE",
+        fqdn,
+        type,
+        oldValue: null,
+        newValue: storedValue,
+        ipAddress,
+        userAgent,
+      });
+      return NextResponse.json({ record: saved }, { status: isFresh ? 201 : 200 });
+    }
+
+    // Single-value A/AAAA/CNAME. Look up regardless of status: a DISABLED row
+    // at this exact (fqdn, type) - e.g. left over from a prior ownership
+    // transfer - gets reactivated in place rather than blocked by the
+    // (namespace, fqdn, type, value) unique constraint.
     const existingRecord = await prisma.dnsRecord.findFirst({ where: { namespace: ns.key, fqdn, type } });
     const isFreshFromUserPerspective = !existingRecord || existingRecord.status === "DISABLED";
 
-    const pdns = getPowerDnsClient();
-    if (type === "TXT") {
-      // Single email TXT value; upsertTxtRecords handles the quoted/chunked
-      // rdata format (DKIM keys can exceed one 255-byte string).
-      await pdns.upsertTxtRecords(ns.dnsZone, fqdn, [storedValue], FIXED_TTL);
-    } else {
-      await pdns.upsertRecord(ns.dnsZone, fqdn, type, storedValue, FIXED_TTL);
-    }
+    await pdns.upsertRecord(ns.dnsZone, fqdn, type, storedValue, FIXED_TTL);
     await pdns.notify(ns.dnsZone);
 
     const saved = existingRecord
@@ -203,7 +265,6 @@ export async function POST(
           },
         });
 
-    const { ipAddress, userAgent } = getRequestMeta(req);
     await recordAuditLog({
       namespace: ns.key,
       address: session.address,
@@ -278,8 +339,50 @@ export async function DELETE(
       return NextResponse.json({ error: authFqdn.error }, { status: 403 });
     }
 
-    // Never delete ACME TXT here - that's the ACME route's job (and this
-    // route's TXT is always a single-value email record).
+    const pdns = getPowerDnsClient();
+    const { ipAddress, userAgent } = getRequestMeta(req);
+
+    // Multi-value MX / email TXT: a `value` picks which one to remove; the
+    // rest of the rrset must survive, so rewrite it with the remaining
+    // values (never delete ACME TXT here - that's the ACME route's job).
+    if (type === "MX" || type === "TXT") {
+      if (!body.value) {
+        return NextResponse.json({ error: "A value is required to delete an MX or TXT record." }, { status: 400 });
+      }
+      const target = await prisma.dnsRecord.findFirst({
+        where: { namespace: ns.key, fqdn, type, value: body.value, status: "ACTIVE", isAcmeChallenge: false },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Record not found." }, { status: 404 });
+      }
+      const remaining = await prisma.dnsRecord.findMany({
+        where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false, id: { not: target.id } },
+      });
+      const remainingValues = remaining.map((r) => r.value);
+      if (type === "TXT") {
+        await pdns.upsertTxtRecords(ns.dnsZone, fqdn, remainingValues, FIXED_TTL);
+      } else {
+        await pdns.upsertMxRecords(ns.dnsZone, fqdn, remainingValues, FIXED_TTL);
+      }
+      await pdns.notify(ns.dnsZone);
+      await prisma.dnsRecord.delete({ where: { id: target.id } });
+
+      await recordAuditLog({
+        namespace: ns.key,
+        address: session.address,
+        claimedName: auth.name,
+        action: "DELETE",
+        fqdn,
+        type,
+        oldValue: target.value,
+        newValue: null,
+        ipAddress,
+        userAgent,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // Single-value A/AAAA/CNAME.
     const existingRecord = await prisma.dnsRecord.findFirst({
       where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false },
     });
@@ -287,13 +390,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Record not found." }, { status: 404 });
     }
 
-    const pdns = getPowerDnsClient();
     await pdns.deleteRecord(ns.dnsZone, fqdn, type);
     await pdns.notify(ns.dnsZone);
 
     await prisma.dnsRecord.delete({ where: { id: existingRecord.id } });
 
-    const { ipAddress, userAgent } = getRequestMeta(req);
     await recordAuditLog({
       namespace: ns.key,
       address: session.address,

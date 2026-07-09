@@ -392,6 +392,13 @@ describe("validateCnameTarget", () => {
     expect(validateCnameTarget("cname.vercel-dns.com.", ownFqdn, "bob.avn", avian).ok).toBe(true);
   });
 
+  it("accepts an underscore-labelled external target (DKIM-CNAME delegation)", () => {
+    // Migadu-style DKIM CNAME target - a _domainkey label mid-hostname.
+    expect(
+      validateCnameTarget("key1.craigd.rxd.zone._domainkey.migadu.com.", "key1._domainkey.craigd.rxd.zone.", "bob.avn", avian).ok,
+    ).toBe(true);
+  });
+
   it("adds a trailing dot if missing", () => {
     const result = validateCnameTarget("craigd.github.io", ownFqdn, "bob.avn", avian);
     expect(result.ok).toBe(true);

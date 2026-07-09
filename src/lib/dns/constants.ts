@@ -66,6 +66,10 @@ export const ACME_TXT_MAX_EXPIRY_HOURS = 24 * 7;
 export const MAX_HOSTNAMES_PER_NAME = 10;
 export const MAX_RECORDS_PER_HOSTNAME = 2; // one A + one AAAA; a CNAME instead takes the whole slot
 export const MAX_ACME_TXT_RECORDS = 10; // active (non-expired) ACME TXT records per source name
+// MX and email TXT are multi-value per hostname (e.g. Migadu's aspmx1/aspmx2;
+// SPF alongside several provider verification tokens) - see the records route.
+export const MAX_MX_PER_HOSTNAME = 5;
+export const MAX_EMAIL_TXT_PER_HOSTNAME = 10;
 
 /** Bounded depth for CNAME-chain loop detection (see wouldCreateCnameLoop). */
 export const MAX_CNAME_CHAIN_HOPS = 10;

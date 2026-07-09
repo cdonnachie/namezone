@@ -292,16 +292,21 @@ function DnsManagerInner({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditing(r);
-                          setAddOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
+                      {/* MX and email TXT are multi-value per hostname, so
+                          there's no in-place "edit" - change them by deleting
+                          and re-adding, like ACME challenges. */}
+                      {r.type !== "MX" && r.type !== "TXT" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditing(r);
+                            setAddOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -401,6 +406,9 @@ function DnsManagerInner({
                       return deleteRecord(namespace, name, {
                         hostname: deleting.record.relativeHost,
                         type: deleting.record.type as EditableRecordType,
+                        // Multi-value rrsets (MX, email TXT) need the value to
+                        // pick which one; harmless for single-value types.
+                        value: deleting.record.value,
                       });
                     }
                     // ACME relativeHost is stored as "_acme-challenge[.host]" -

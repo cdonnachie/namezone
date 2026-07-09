@@ -125,7 +125,11 @@ export function createOrUpdateRecord(
   });
 }
 
-export function deleteRecord(namespace: string, name: string, data: { hostname: string; type: EditableRecordType }) {
+export function deleteRecord(
+  namespace: string,
+  name: string,
+  data: { hostname: string; type: EditableRecordType; value?: string },
+) {
   return request<{ ok: true }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/records`, {
     method: "DELETE",
     body: JSON.stringify(data),

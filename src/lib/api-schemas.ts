@@ -36,6 +36,9 @@ export const createRecordSchema = z.object({
 export const deleteRecordSchema = z.object({
   hostname: z.string().trim().min(1).max(253),
   type: recordTypeSchema,
+  // Required to delete one value of a multi-value rrset (MX, email TXT);
+  // ignored for single-value A/AAAA/CNAME.
+  value: z.string().trim().min(1).max(1024).optional(),
 });
 
 // ACME challenge records: `hostname` is the target service host (e.g. "@",

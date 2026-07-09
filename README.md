@@ -215,8 +215,11 @@ For an allowlisted name, the general Add Record flow additionally offers:
 
 - **MX** — `"<priority> <mail-host>"` (e.g. `10 mail.example.com`). Target validated like a CNAME
   target: a real hostname, not an IP/localhost, and if it falls inside our own zone it must stay
-  within the caller's namespace.
-- **TXT**, host-guided: `v=DMARC1; …` only under `_dmarc` and DKIM `p=…` only under
+  within the caller's namespace. **Multi-value** (up to `MAX_MX_PER_HOSTNAME`): providers like
+  Migadu publish two MX hosts, so several MX coexist at one hostname.
+- **TXT**, host-guided and **multi-value** (up to `MAX_EMAIL_TXT_PER_HOSTNAME`, so SPF can sit
+  alongside several verification tokens at one host; a second `v=spf1` is rejected since only one
+  SPF record is valid): `v=DMARC1; …` only under `_dmarc` and DKIM `p=…` only under
   `<selector>._domainkey` (both shape-checked); a plain host takes SPF plus the provider
   verification tokens onboarding needs (`hosted-email-verify=`, `google-site-verification=`,
   `MS=`, …) — too many formats to allowlist, and email names are operator-trusted, so the plain
@@ -224,6 +227,11 @@ For an allowlisted name, the general Add Record flow additionally offers:
   host shapes are the only additions to the underscore-label ban (which otherwise still blocks
   everything but `_acme-challenge`). DKIM public keys longer than a single 255-byte DNS string
   are automatically split into multiple quoted strings.
+- **DKIM via CNAME** — some providers (Migadu) delegate DKIM with a CNAME at
+  `<selector>._domainkey` pointing to a `…._domainkey.<provider>` host rather than a TXT key;
+  CNAME targets accept underscore-labelled hostnames for this. Because MX and TXT are
+  multi-value while a CNAME node can hold nothing else, MX/TXT/DKIM-CNAME are managed as
+  add/delete (no in-place edit), like ACME challenges.
 
 Everything else still applies unchanged: the record is still ownership-checked, still can't touch
 the apex/reserved names (`ns1`/`ns2`/`www`) or another owner's zone, still passes through the

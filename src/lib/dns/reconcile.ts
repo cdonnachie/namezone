@@ -169,8 +169,11 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
   });
 
-  const liveSingle = liveRecords.filter((r) => r.type !== "TXT");
-  const liveTxt = liveRecords.filter((r) => r.type === "TXT");
+  // TXT and MX are multi-value (many values per fqdn+type); A/AAAA/CNAME are
+  // single-value (one per fqdn+type).
+  const isMultiValueType = (t: string) => t === "TXT" || t === "MX";
+  const liveSingle = liveRecords.filter((r) => !isMultiValueType(r.type));
+  const liveMulti = liveRecords.filter((r) => isMultiValueType(r.type));
 
   // Single-value types (A/AAAA/CNAME): exactly one active value per (fqdn, type) by policy.
   const singleKeys = new Set(liveSingle.map((r) => `${r.name}|${r.type}`));
@@ -204,36 +207,35 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     });
   }
   for (const local of localRecords) {
-    if (local.type === "TXT") continue;
+    if (isMultiValueType(local.type)) continue;
     if (!singleKeys.has(`${local.fqdn}|${local.type}`)) {
       await prisma.dnsRecord.delete({ where: { id: local.id } }).catch(() => {});
     }
   }
 
-  // Multi-value type (TXT): many values may coexist per (fqdn, type).
-  // Classify by host: only _acme-challenge.* TXT is an auto-expiring ACME
-  // challenge - email TXT (SPF/DKIM/DMARC) is permanent, so it must NOT be
-  // stamped isAcmeChallenge/expiresAt or it would be swept after 24h.
-  const liveTxtKeys = new Set(liveTxt.map((r) => `${r.name}|${r.content}`));
-  for (const live of liveTxt) {
+  // Multi-value types (TXT, MX): many values may coexist per (fqdn, type).
+  // For TXT, classify by host: only _acme-challenge.* TXT is an auto-expiring
+  // ACME challenge - email TXT (SPF/DKIM/DMARC) and MX are permanent, so they
+  // must NOT be stamped isAcmeChallenge/expiresAt or they'd be swept after 24h.
+  const liveMultiKeys = new Set(liveMulti.map((r) => `${r.name}|${r.type}|${r.content}`));
+  for (const live of liveMulti) {
     const relativeHost = fqdnToRelativeHost(live.name, name, namespace);
-    const isAcme = isAcmeChallengeHost(relativeHost);
+    const isAcme = live.type === "TXT" && isAcmeChallengeHost(relativeHost);
     await prisma.dnsRecord.upsert({
       where: {
-        namespace_fqdn_type_value: { namespace: namespace.key, fqdn: live.name, type: "TXT", value: live.content },
+        namespace_fqdn_type_value: { namespace: namespace.key, fqdn: live.name, type: live.type, value: live.content },
       },
       create: {
         namespace: namespace.key,
         claimedName: name,
         fqdn: live.name,
         relativeHost,
-        type: "TXT",
+        type: live.type,
         value: live.content,
         ttl: live.ttl,
         isAcmeChallenge: isAcme,
         // ACME challenges discovered outside the app have no known intended
-        // lifetime - give them the standard default rather than leaving them
-        // permanent. Email TXT is permanent (no expiry).
+        // lifetime - give them the standard default. Email TXT/MX are permanent.
         expiresAt: isAcme
           ? new Date(Date.now() + ACME_TXT_DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000)
           : null,
@@ -242,8 +244,8 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     });
   }
   for (const local of localRecords) {
-    if (local.type !== "TXT") continue;
-    if (!liveTxtKeys.has(`${local.fqdn}|${local.value}`)) {
+    if (!isMultiValueType(local.type)) continue;
+    if (!liveMultiKeys.has(`${local.fqdn}|${local.type}|${local.value}`)) {
       await prisma.dnsRecord.delete({ where: { id: local.id } }).catch(() => {});
     }
   }

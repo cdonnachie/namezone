@@ -55,6 +55,34 @@ describe("PowerDnsClient write guard (defense in depth)", () => {
   });
 });
 
+describe("multi-value MX rrset", () => {
+  const live = new PowerDnsClient({ baseUrl: "http://pdns.test", apiKey: "k", serverId: "localhost" });
+
+  it("writes all MX values as one REPLACE rrset", async () => {
+    let body: { rrsets: Array<{ type: string; changetype: string; records: Array<{ content: string }> }> } | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      return new Response(null, { status: 204 });
+    }));
+    await live.upsertMxRecords("rxd.zone", "craigd.rxd.zone.", ["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."], 300);
+    expect(body?.rrsets[0].type).toBe("MX");
+    expect(body?.rrsets[0].changetype).toBe("REPLACE");
+    expect(body?.rrsets[0].records.map((r) => r.content)).toEqual(["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."]);
+    vi.unstubAllGlobals();
+  });
+
+  it("deletes the rrset when given an empty value list", async () => {
+    let body: { rrsets: Array<{ changetype: string }> } | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      return new Response(null, { status: 204 });
+    }));
+    await live.upsertMxRecords("rxd.zone", "craigd.rxd.zone.", [], 300);
+    expect(body?.rrsets[0].changetype).toBe("DELETE");
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("TXT rdata quoting/chunking (DKIM keys)", () => {
   // A configured (non-dry-run) client so patchZone actually builds a PATCH body.
   const live = new PowerDnsClient({ baseUrl: "http://pdns.test", apiKey: "k", serverId: "localhost" });
