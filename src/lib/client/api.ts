@@ -92,13 +92,15 @@ export function fetchOwnedNames(namespace: string) {
 }
 
 export type BasicRecordType = "A" | "AAAA" | "CNAME";
+/** Types creatable via the general Add Record flow, incl. email types (allowlist-gated server-side). */
+export type EditableRecordType = BasicRecordType | "MX" | "TXT";
 
 export interface DnsRecordDto {
   id: string;
   claimedName: string;
   fqdn: string;
   relativeHost: string;
-  type: BasicRecordType | "TXT";
+  type: BasicRecordType | "TXT" | "MX";
   value: string;
   ttl: number;
   isAcmeChallenge: boolean;
@@ -115,7 +117,7 @@ export function fetchDnsRecords(namespace: string, name: string) {
 export function createOrUpdateRecord(
   namespace: string,
   name: string,
-  data: { hostname: string; type: BasicRecordType; value: string },
+  data: { hostname: string; type: EditableRecordType; value: string },
 ) {
   return request<{ record: DnsRecordDto }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/records`, {
     method: "POST",
@@ -123,7 +125,7 @@ export function createOrUpdateRecord(
   });
 }
 
-export function deleteRecord(namespace: string, name: string, data: { hostname: string; type: BasicRecordType }) {
+export function deleteRecord(namespace: string, name: string, data: { hostname: string; type: EditableRecordType }) {
   return request<{ ok: true }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/records`, {
     method: "DELETE",
     body: JSON.stringify(data),

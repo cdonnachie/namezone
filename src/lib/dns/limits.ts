@@ -3,7 +3,7 @@ import type { ValidationResult } from "./validation";
 
 export interface ExistingBasicRecordSummary {
   relativeHost: string;
-  type: "A" | "AAAA" | "CNAME";
+  type: "A" | "AAAA" | "CNAME" | "MX" | "TXT";
 }
 
 function ok(): ValidationResult<true> {
@@ -14,15 +14,16 @@ function fail(error: string): ValidationResult<true> {
 }
 
 /**
- * Checks the per-ANS-name limits for adding/replacing a single A/AAAA/CNAME
- * record: max distinct hostnames, max records per hostname, and the
- * A/AAAA <-> CNAME mutual exclusivity rule (a hostname has either up to one
- * A and one AAAA, or a single CNAME, never both kinds). Pass the full set
- * of basic (non-ACME) records that currently exist for the ANS name.
+ * Checks the per-name limits for adding/replacing a single record: max
+ * distinct hostnames, max A/AAAA per hostname, and CNAME exclusivity - per
+ * RFC, a CNAME node may carry no other record type, so a hostname has
+ * either a single CNAME or any mix of A/AAAA/MX/TXT (MX and email TXT are
+ * one-per-hostname by replace semantics). Pass the full set of non-ACME
+ * records that currently exist for the name.
  */
 export function checkRecordLimits(
   existing: ExistingBasicRecordSummary[],
-  target: { relativeHost: string; type: "A" | "AAAA" | "CNAME" },
+  target: { relativeHost: string; type: "A" | "AAAA" | "CNAME" | "MX" | "TXT" },
 ): ValidationResult<true> {
   const sameHost = existing.filter((r) => r.relativeHost === target.relativeHost);
   const isReplace = sameHost.some((r) => r.type === target.type);
@@ -33,23 +34,24 @@ export function checkRecordLimits(
   }
 
   const hasCname = sameHost.some((r) => r.type === "CNAME");
-  const hasAddress = sameHost.some((r) => r.type === "A" || r.type === "AAAA");
+  const hasOther = sameHost.some((r) => r.type !== "CNAME");
 
-  if (target.type === "CNAME" && hasAddress) {
-    return fail("This hostname already has an A/AAAA record; remove it before adding a CNAME.");
+  if (target.type === "CNAME" && hasOther) {
+    return fail("This hostname already has other records; remove them before adding a CNAME.");
   }
   if (target.type !== "CNAME" && hasCname) {
-    return fail("This hostname already has a CNAME record; remove it before adding an A/AAAA record.");
+    return fail("This hostname already has a CNAME record; remove it before adding other records.");
   }
 
   const distinctHosts = new Set(existing.map((r) => r.relativeHost));
   const isNewHost = !distinctHosts.has(target.relativeHost);
   if (isNewHost && distinctHosts.size >= MAX_HOSTNAMES_PER_NAME) {
-    return fail(`Maximum of ${MAX_HOSTNAMES_PER_NAME} hostnames per ANS name reached.`);
+    return fail(`Maximum of ${MAX_HOSTNAMES_PER_NAME} hostnames per name reached.`);
   }
 
-  if (target.type !== "CNAME" && sameHost.length >= MAX_RECORDS_PER_HOSTNAME) {
-    return fail(`Maximum of ${MAX_RECORDS_PER_HOSTNAME} records per hostname reached (one A and one AAAA).`);
+  const sameHostAddresses = sameHost.filter((r) => r.type === "A" || r.type === "AAAA");
+  if ((target.type === "A" || target.type === "AAAA") && sameHostAddresses.length >= MAX_RECORDS_PER_HOSTNAME) {
+    return fail(`Maximum of ${MAX_RECORDS_PER_HOSTNAME} address records per hostname reached (one A and one AAAA).`);
   }
 
   return ok();

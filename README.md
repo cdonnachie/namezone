@@ -176,8 +176,9 @@ general-purpose DNS free-for-all:
 | A       | Yes                                          | Strict IPv4 |
 | AAAA    | Yes                                          | Strict IPv6 |
 | CNAME   | Yes, with rules                              | See below |
-| TXT     | Only under `_acme-challenge.*`               | ACME DNS-01 only, auto-expiring |
-| Others  | No                                           | MX, NS, SRV, PTR, CAA, wildcards - never |
+| TXT     | `_acme-challenge.*`, or SPF/DKIM/DMARC on allowlisted names | ACME auto-expires; email TXT is shape-validated (see "Email records") |
+| MX      | Allowlisted names only                       | `EMAIL_ALLOWED_NAMES` - see "Email records" |
+| Others  | No                                           | NS, SRV, PTR, CAA, SOA, wildcards - never |
 
 **CNAME rules** (`validateCnameTarget`, `wouldCreateCnameLoop` in `src/lib/dns/validation.ts`):
 - A hostname has either up to one A **and** one AAAA record, or a single CNAME - never both
@@ -197,7 +198,48 @@ general record editor. Multiple values may coexist at the same challenge name (A
 sometimes need more than one during renewals). Every challenge value gets its own `expiresAt`
 (default 24h, selectable up to 7 days) and is deleted automatically - both from PowerDNS and
 locally - the next time anything reconciles that name's records (`src/lib/dns/reconcile.ts`).
-General TXT records (anywhere other than `_acme-challenge.*`) are always rejected.
+General TXT records (anywhere other than `_acme-challenge.*` or the email shapes below) are
+always rejected.
+
+## Email records (allowlist-gated)
+
+Owning a name lets you host a **website**; running **email** under the shared parent zone is a
+separate, opt-in capability, because sending mail stakes the *whole zone's* reputation
+(blocklists and mail providers largely score the registrable domain, not the subdomain). So MX
+and email-shaped TXT (SPF/DKIM/DMARC) are **operator-granted to known names**, not
+permissionless. The allowlist is `EMAIL_ALLOWED_NAMES` (comma-separated full source names, e.g.
+`craigd.rxd,art.rxd`); unset means no name can create email records and the DNS surface stays
+A/AAAA/CNAME + ACME TXT exactly as before. See `src/lib/dns/email.ts`.
+
+For an allowlisted name, the general Add Record flow additionally offers:
+
+- **MX** — `"<priority> <mail-host>"` (e.g. `10 mail.example.com`). Target validated like a CNAME
+  target: a real hostname, not an IP/localhost, and if it falls inside our own zone it must stay
+  within the caller's namespace.
+- **TXT**, shape-validated by hostname so free-form TXT remains impossible: `v=spf1 …` at a plain
+  host, `v=DMARC1; …` only under `_dmarc`, DKIM `p=…` only under `<selector>._domainkey`. The two
+  underscore host shapes are the only additions to the underscore-label ban (which otherwise
+  still blocks everything but `_acme-challenge`). DKIM public keys longer than a single 255-byte
+  DNS string are automatically split into multiple quoted strings.
+
+Everything else still applies unchanged: the record is still ownership-checked, still can't touch
+the apex/reserved names (`ns1`/`ns2`/`www`) or another owner's zone, still passes through the
+PowerDNS write guard, is audit-logged, and is disabled on ownership transfer. Email TXT is
+permanent (unlike auto-expiring ACME TXT — reconcile distinguishes the two by host).
+
+**Operator prerequisite — do this once per zone before enabling anyone, including yourself.**
+Publish a hard-fail SPF and a reject DMARC at each zone apex so every *non*-allowlisted subdomain
+can't be spoofed by default (allowlisted names override with their own `_dmarc`):
+
+```bash
+pdnsutil add-record rxd.zone rxd.zone       TXT 3600 '"v=spf1 -all"'
+pdnsutil add-record rxd.zone _dmarc.rxd.zone TXT 3600 '"v=DMARC1; p=reject; sp=reject;"'
+pdnsutil increase-serial rxd.zone && pdns_control notify rxd.zone
+# repeat for avn.zone
+```
+
+Note the app only publishes DNS — an actual mailbox at `craig@craigd.rxd.zone` still needs a mail
+server (mailcow/Mailu/etc.) that the MX points at, with clean reverse DNS on its sending IP.
 
 ## Public DNS lookup
 
@@ -223,8 +265,11 @@ ever change.
 
 ## Security rules enforced
 
-- Hostnames beginning with `_` are rejected, with one narrow exception: `_acme-challenge`
-  (and `_acme-challenge.<host>`), and only paired with TXT - see above.
+- Hostnames beginning with `_` are rejected, with narrow exceptions: `_acme-challenge`
+  (and `_acme-challenge.<host>`) paired with TXT; and, for email-allowlisted names only, a
+  leading `_dmarc` and `_domainkey` as the second label (DKIM) - see "Email records".
+- MX and SPF/DKIM/DMARC TXT records can only be created by names on the `EMAIL_ALLOWED_NAMES`
+  allowlist; every other name is A/AAAA/CNAME + ACME TXT only.
 - A namespace's own DNS zone apex and its reserved hostnames (`ns1`/`ns2`/`www`) can never be
   modified, and the corresponding source names (`www.avn`, `www.rxd`, ...) can't be claimed or
   managed at all - even by their genuine on-chain owner (`RESERVED_ROOT_HOSTS` in

@@ -140,6 +140,22 @@ describe("validateRelativeHost", () => {
     expect(validateRelativeHost("_domainkey").ok).toBe(false);
   });
 
+  it("permits the email underscore shapes only with allowEmailLabels", () => {
+    // _dmarc as a leading label, _domainkey as the SECOND label (DKIM).
+    expect(validateRelativeHost("_dmarc", { allowEmailLabels: true }).ok).toBe(true);
+    expect(validateRelativeHost("_dmarc.www", { allowEmailLabels: true }).ok).toBe(true);
+    expect(validateRelativeHost("sel._domainkey", { allowEmailLabels: true }).ok).toBe(true);
+    expect(validateRelativeHost("sel._domainkey.mail", { allowEmailLabels: true }).ok).toBe(true);
+  });
+
+  it("does not let allowEmailLabels open up arbitrary underscore labels", () => {
+    // _domainkey only valid as the 2nd label; _dmarc only as the 1st.
+    expect(validateRelativeHost("_domainkey", { allowEmailLabels: true }).ok).toBe(false);
+    expect(validateRelativeHost("www._dmarc", { allowEmailLabels: true }).ok).toBe(false);
+    expect(validateRelativeHost("_spf", { allowEmailLabels: true }).ok).toBe(false);
+    expect(validateRelativeHost("_dmarc._extra", { allowEmailLabels: true }).ok).toBe(false);
+  });
+
   it("rejects underscore-prefixed labels nested in a multi-label host", () => {
     expect(validateRelativeHost("foo._bar").ok).toBe(false);
   });
@@ -244,11 +260,11 @@ describe("isValidIPv6", () => {
 });
 
 describe("validateRecordType", () => {
-  it.each(["A", "AAAA", "CNAME", "TXT", "a", "cname"])("accepts %s (format-level only)", (type) => {
+  it.each(["A", "AAAA", "CNAME", "TXT", "MX", "a", "cname", "mx"])("accepts %s (format-level only)", (type) => {
     expect(validateRecordType(type).ok).toBe(true);
   });
 
-  it.each(["MX", "NS", "SRV", "PTR", "CAA", ""])("rejects %s", (type) => {
+  it.each(["NS", "SRV", "PTR", "CAA", "SOA", ""])("rejects %s", (type) => {
     expect(validateRecordType(type).ok).toBe(false);
   });
 });

@@ -11,8 +11,8 @@ export class PowerDnsError extends Error {
   }
 }
 
-export type PowerDnsSupportedType = "A" | "AAAA" | "CNAME" | "TXT";
-const SUPPORTED_TYPES: readonly string[] = ["A", "AAAA", "CNAME", "TXT"];
+export type PowerDnsSupportedType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
+const SUPPORTED_TYPES: readonly string[] = ["A", "AAAA", "CNAME", "TXT", "MX"];
 
 interface PowerDnsRecord {
   content: string;
@@ -39,20 +39,32 @@ export interface PowerDnsRecordSummary {
   disabled: boolean;
 }
 
-/** Wraps a TXT value in the quoted, escaped rdata format DNS/PowerDNS expects. */
+// A single DNS TXT character-string maxes out at 255 bytes; longer values
+// (DKIM public keys, notably) must be split into multiple quoted strings
+// that resolvers concatenate back together.
+const TXT_CHUNK_SIZE = 255;
+
+/** Wraps a TXT value in the quoted, escaped (and if needed chunked) rdata format DNS/PowerDNS expects. */
 function formatTxtRdata(value: string): string {
-  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"${escaped}"`;
+  const chunks: string[] = [];
+  for (let i = 0; i < value.length; i += TXT_CHUNK_SIZE) {
+    const chunk = value.slice(i, i + TXT_CHUNK_SIZE);
+    chunks.push(`"${chunk.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  }
+  return chunks.length > 0 ? chunks.join(" ") : '""';
 }
 
-/** Inverse of formatTxtRdata: strips surrounding quotes and unescapes. */
+/** Inverse of formatTxtRdata: concatenates all quoted strings, unescaped. */
 function parseTxtRdata(content: string): string {
   const trimmed = content.trim();
-  const unwrapped =
-    trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')
-      ? trimmed.slice(1, -1)
-      : trimmed;
-  return unwrapped.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  if (!trimmed.startsWith('"')) return trimmed;
+  const segments: string[] = [];
+  const re = /"((?:[^"\\]|\\.)*)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(trimmed)) !== null) {
+    segments.push(match[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
+  }
+  return segments.length > 0 ? segments.join("") : trimmed;
 }
 
 /**
@@ -185,11 +197,11 @@ export class PowerDnsClient {
     return all.filter((r) => r.name === baseFqdn || r.name.endsWith(`.${baseFqdn}`));
   }
 
-  /** Creates or replaces a single A/AAAA/CNAME record at `fqdn` (single-value rrset). */
+  /** Creates or replaces a single A/AAAA/CNAME/MX record at `fqdn` (single-value rrset). */
   async upsertRecord(
     zone: string,
     fqdn: string,
-    type: "A" | "AAAA" | "CNAME",
+    type: "A" | "AAAA" | "CNAME" | "MX",
     value: string,
     ttl: number = FIXED_TTL,
   ): Promise<void> {

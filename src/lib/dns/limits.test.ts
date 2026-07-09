@@ -83,6 +83,32 @@ describe("checkRecordLimits", () => {
     const result = checkRecordLimits(existing, { relativeHost: "one-more", type: "CNAME" });
     expect(result.ok).toBe(false);
   });
+
+  it("allows MX and TXT to coexist with A/AAAA on the same hostname", () => {
+    const existing: ExistingBasicRecordSummary[] = [
+      { relativeHost: "@", type: "A" },
+      { relativeHost: "@", type: "AAAA" },
+    ];
+    expect(checkRecordLimits(existing, { relativeHost: "@", type: "MX" }).ok).toBe(true);
+    expect(checkRecordLimits(existing, { relativeHost: "@", type: "TXT" }).ok).toBe(true);
+  });
+
+  it("MX/TXT do not count against the one-A-one-AAAA address limit", () => {
+    const existing: ExistingBasicRecordSummary[] = [
+      { relativeHost: "@", type: "A" },
+      { relativeHost: "@", type: "MX" },
+      { relativeHost: "@", type: "TXT" },
+    ];
+    expect(checkRecordLimits(existing, { relativeHost: "@", type: "AAAA" }).ok).toBe(true);
+  });
+
+  it("CNAME exclusivity extends to MX/TXT, not just A/AAAA", () => {
+    const withMx: ExistingBasicRecordSummary[] = [{ relativeHost: "mail", type: "MX" }];
+    expect(checkRecordLimits(withMx, { relativeHost: "mail", type: "CNAME" }).ok).toBe(false);
+    const withCname: ExistingBasicRecordSummary[] = [{ relativeHost: "mail", type: "CNAME" }];
+    expect(checkRecordLimits(withCname, { relativeHost: "mail", type: "MX" }).ok).toBe(false);
+    expect(checkRecordLimits(withCname, { relativeHost: "mail", type: "TXT" }).ok).toBe(false);
+  });
 });
 
 describe("checkAcmeTxtLimit", () => {

@@ -57,7 +57,7 @@ import {
   createOrUpdateRecord,
   deleteAcmeChallenge,
   deleteRecord,
-  type BasicRecordType,
+  type EditableRecordType,
   type DnsRecordDto,
 } from "@/lib/client/api";
 import {
@@ -67,6 +67,7 @@ import {
   validateRecordValue,
   validateRelativeHost,
 } from "@/lib/dns/validation";
+import { validateEmailTxtValue, validateMxValue } from "@/lib/dns/email";
 import {
   ACME_TXT_DEFAULT_EXPIRY_HOURS,
   MAX_ACME_TXT_RECORDS,
@@ -113,17 +114,25 @@ export function DnsManager({
   address,
   name,
   zone,
+  emailEnabled,
   initialRecords,
 }: {
   namespace: string;
   address: string;
   name: string;
   zone: string;
+  emailEnabled: boolean;
   initialRecords: DnsRecordDto[];
 }) {
   return (
     <StepUpProvider namespace={namespace} address={address}>
-      <DnsManagerInner namespace={namespace} name={name} zone={zone} initialRecords={initialRecords} />
+      <DnsManagerInner
+        namespace={namespace}
+        name={name}
+        zone={zone}
+        emailEnabled={emailEnabled}
+        initialRecords={initialRecords}
+      />
     </StepUpProvider>
   );
 }
@@ -132,11 +141,13 @@ function DnsManagerInner({
   namespace,
   name,
   zone,
+  emailEnabled,
   initialRecords,
 }: {
   namespace: string;
   name: string;
   zone: string;
+  emailEnabled: boolean;
   initialRecords: DnsRecordDto[];
 }) {
   const runWithStepUp = useStepUp();
@@ -227,6 +238,7 @@ function DnsManagerInner({
                 namespace={namespace}
                 name={name}
                 zone={zone}
+                emailEnabled={emailEnabled}
                 existing={editing}
                 onSaved={(record) => {
                   upsertLocal(record);
@@ -388,7 +400,7 @@ function DnsManagerInner({
                     if (deleting.kind === "basic") {
                       return deleteRecord(namespace, name, {
                         hostname: deleting.record.relativeHost,
-                        type: deleting.record.type as BasicRecordType,
+                        type: deleting.record.type as EditableRecordType,
                       });
                     }
                     // ACME relativeHost is stored as "_acme-challenge[.host]" -
@@ -417,25 +429,37 @@ function DnsManagerInner({
   );
 }
 
+const VALUE_PLACEHOLDER: Record<EditableRecordType, string> = {
+  A: "203.0.113.20",
+  AAAA: "2001:db8::1",
+  CNAME: "craigd.github.io.",
+  MX: "10 mail.example.com",
+  TXT: "v=spf1 include:example.com -all",
+};
+
 function RecordDialogContent({
   namespace,
   name,
   zone,
+  emailEnabled,
   existing,
   onSaved,
 }: {
   namespace: string;
   name: string;
   zone: string;
+  emailEnabled: boolean;
   existing: DnsRecordDto | null;
   onSaved: (record: DnsRecordDto) => void;
 }) {
   const runWithStepUp = useStepUp();
   const [hostname, setHostname] = useState(existing?.relativeHost ?? "");
-  const [type, setType] = useState<BasicRecordType>((existing?.type as BasicRecordType) ?? "A");
+  const [type, setType] = useState<EditableRecordType>((existing?.type as EditableRecordType) ?? "A");
   const [value, setValue] = useState(existing?.value ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const nsShape = { tld: zone.split(".")[0], dnsZone: zone.replace(/\.$/, "") };
 
   const previewFqdn = useMemo(() => {
     const host = hostname.trim().toLowerCase();
@@ -445,7 +469,7 @@ function RecordDialogContent({
 
   async function handleSave() {
     setError(null);
-    const hostResult = validateRelativeHost(hostname);
+    const hostResult = validateRelativeHost(hostname, { allowEmailLabels: emailEnabled });
     if (!hostResult.ok) {
       setError(hostResult.error);
       return;
@@ -454,16 +478,24 @@ function RecordDialogContent({
       setError('Use "Add SSL Challenge" for _acme-challenge records.');
       return;
     }
-    // Client-side preview validation only needs the zone suffix for the
-    // self-reference/namespace checks; the server re-validates
-    // authoritatively with the real namespace config either way.
-    const valueResult =
-      type === "CNAME"
-        ? validateCnameTarget(value, previewFqdn, name, { tld: zone.split(".")[0], dnsZone: zone.replace(/\.$/, "") })
-        : validateRecordValue(type, value);
-    if (!valueResult.ok) {
-      setError(valueResult.error);
-      return;
+    // Client-side preview validation; the server re-validates authoritatively.
+    let outValue: string;
+    if (type === "CNAME") {
+      const r = validateCnameTarget(value, previewFqdn, name, nsShape);
+      if (!r.ok) return setError(r.error);
+      outValue = r.value;
+    } else if (type === "MX") {
+      const r = validateMxValue(value, name, nsShape);
+      if (!r.ok) return setError(r.error);
+      outValue = r.value.content;
+    } else if (type === "TXT") {
+      const r = validateEmailTxtValue(hostResult.value, value);
+      if (!r.ok) return setError(r.error);
+      outValue = r.value;
+    } else {
+      const r = validateRecordValue(type, value);
+      if (!r.ok) return setError(r.error);
+      outValue = r.value;
     }
 
     setSaving(true);
@@ -472,7 +504,7 @@ function RecordDialogContent({
         createOrUpdateRecord(namespace, name, {
           hostname: hostResult.value,
           type,
-          value: valueResult.value,
+          value: outValue,
         }),
       );
       toast.success("DNS record saved and synced to PowerDNS");
@@ -489,8 +521,8 @@ function RecordDialogContent({
       <DialogHeader>
         <DialogTitle>{existing ? "Edit DNS record" : "Add DNS record"}</DialogTitle>
         <DialogDescription>
-          A and AAAA records use a fixed TTL of 300 seconds. A hostname can have A/AAAA records
-          or a single CNAME, never both.
+          Records use a fixed TTL of 300 seconds. A hostname can have a single CNAME or any mix
+          of A/AAAA{emailEnabled ? "/MX/TXT" : ""}, never a CNAME alongside others.
         </DialogDescription>
       </DialogHeader>
 
@@ -499,7 +531,7 @@ function RecordDialogContent({
           <Label htmlFor="hostname">Hostname</Label>
           <Input
             id="hostname"
-            placeholder="@, www, test, api"
+            placeholder={emailEnabled ? "@, www, _dmarc, sel._domainkey" : "@, www, test, api"}
             value={hostname}
             onChange={(e) => setHostname(e.target.value)}
             disabled={!!existing}
@@ -513,11 +545,14 @@ function RecordDialogContent({
             Record type
             <InfoTooltip>
               A points a hostname at an IPv4 address, AAAA at an IPv6 address, and CNAME points
-              it at another hostname instead (e.g. your GitHub Pages/Vercel/Netlify URL). A
-              hostname can have A/AAAA records or one CNAME, never both.
+              it at another hostname instead (e.g. your GitHub Pages/Vercel/Netlify URL).
+              {emailEnabled
+                ? " MX routes email to a mail server; TXT here carries SPF (plain host), DKIM (under _domainkey) or DMARC (under _dmarc)."
+                : ""}{" "}
+              A hostname can have one CNAME or a mix of the others, never both.
             </InfoTooltip>
           </Label>
-          <Select value={type} onValueChange={(v) => setType(v as BasicRecordType)} disabled={!!existing}>
+          <Select value={type} onValueChange={(v) => setType(v as EditableRecordType)} disabled={!!existing}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -525,17 +560,19 @@ function RecordDialogContent({
               <SelectItem value="A">A (IPv4)</SelectItem>
               <SelectItem value="AAAA">AAAA (IPv6)</SelectItem>
               <SelectItem value="CNAME">CNAME (alias)</SelectItem>
+              {emailEnabled && <SelectItem value="MX">MX (mail server)</SelectItem>}
+              {emailEnabled && <SelectItem value="TXT">TXT (SPF / DKIM / DMARC)</SelectItem>}
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="value">{type === "CNAME" ? "Target hostname" : "Value"}</Label>
+          <Label htmlFor="value">
+            {type === "CNAME" ? "Target hostname" : type === "MX" ? "Priority and mail host" : "Value"}
+          </Label>
           <Input
             id="value"
-            placeholder={
-              type === "A" ? "203.0.113.20" : type === "AAAA" ? "2001:db8::1" : "craigd.github.io."
-            }
+            placeholder={VALUE_PLACEHOLDER[type]}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             className="font-mono"
@@ -543,6 +580,17 @@ function RecordDialogContent({
           {type === "CNAME" && (
             <p className="text-xs text-muted-foreground">
               Must be a hostname, not an IP (e.g. GitHub Pages, Vercel, Netlify targets).
+            </p>
+          )}
+          {type === "MX" && (
+            <p className="text-xs text-muted-foreground">
+              Format: priority then mail host, e.g. <span className="font-mono">10 mail.example.com</span>.
+            </p>
+          )}
+          {type === "TXT" && (
+            <p className="text-xs text-muted-foreground">
+              SPF at a normal host, DMARC under <span className="font-mono">_dmarc</span>, DKIM under{" "}
+              <span className="font-mono">&lt;selector&gt;._domainkey</span>.
             </p>
           )}
         </div>

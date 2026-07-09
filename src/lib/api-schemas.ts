@@ -21,13 +21,16 @@ export const verifyRequestSchema = z.object({
   sharedComputer: z.boolean().optional(),
 });
 
-// Basic (non-ACME) record types creatable via the general Add Record flow.
-export const recordTypeSchema = z.enum(["A", "AAAA", "CNAME"]);
+// Record types creatable via the general Add Record flow. MX/TXT are
+// email types, allowlist-gated per name in the route (see src/lib/dns/email.ts);
+// the schema just permits the shape - authorization happens downstream.
+export const recordTypeSchema = z.enum(["A", "AAAA", "CNAME", "MX", "TXT"]);
 
 export const createRecordSchema = z.object({
   hostname: z.string().trim().min(1).max(253),
   type: recordTypeSchema,
-  value: z.string().trim().min(1).max(253),
+  // Long enough for DKIM public keys / SPF policies as well as A/AAAA/CNAME/MX.
+  value: z.string().trim().min(1).max(1024),
 });
 
 export const deleteRecordSchema = z.object({

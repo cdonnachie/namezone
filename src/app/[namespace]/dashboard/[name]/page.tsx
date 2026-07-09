@@ -8,6 +8,7 @@ import { requireClaimedNameOwnership } from "@/lib/ownership/sync";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { reconcileClaimedNameRecordsWithPowerDns } from "@/lib/dns/reconcile";
+import { isEmailEnabledName } from "@/lib/dns/email";
 import { sourceNameToBaseFqdn } from "@/lib/dns/validation";
 import { getNamespace } from "@/lib/namespaces";
 import { DnsManager } from "./dns-manager";
@@ -80,6 +81,7 @@ export default async function DnsManagementPage({
         address={session.address}
         name={auth.name}
         zone={sourceNameToBaseFqdn(auth.name, ns)}
+        emailEnabled={isEmailEnabledName(auth.name)}
         initialRecords={records.map((r) => ({
           id: r.id,
           claimedName: r.claimedName,

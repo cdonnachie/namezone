@@ -105,8 +105,16 @@ export function sourceNameToBaseFqdn(name: string, ns: DnsNamespace): string {
  * "_acme-challenge.www". Rejects empty labels, double dots,
  * underscore-prefixed labels (other than the ACME exception), and
  * wildcards. Namespace-independent - the same rules apply everywhere.
+ *
+ * `allowEmailLabels` (email-allowlisted names only - see ../email.ts)
+ * additionally permits the two underscore shapes email requires: a leading
+ * "_dmarc" label, and "_domainkey" as the second label (DKIM's
+ * "<selector>._domainkey[.host]").
  */
-export function validateRelativeHost(raw: string): ValidationResult<string> {
+export function validateRelativeHost(
+  raw: string,
+  options?: { allowEmailLabels?: boolean },
+): ValidationResult<string> {
   if (raw === undefined || raw === null || raw === "") {
     return fail("Hostname is required.");
   }
@@ -132,10 +140,16 @@ export function validateRelativeHost(raw: string): ValidationResult<string> {
   }
 
   const labels = host.split(".");
-  for (const label of labels) {
+  for (const [index, label] of labels.entries()) {
     if (label.length === 0) return fail("Hostname cannot contain empty labels (double dots).");
     if (label.startsWith("_")) {
-      return fail(`Label "${label}" cannot start with an underscore.`);
+      const isEmailLabel =
+        options?.allowEmailLabels &&
+        ((index === 0 && label === "_dmarc") || (index === 1 && label === "_domainkey"));
+      if (!isEmailLabel) {
+        return fail(`Label "${label}" cannot start with an underscore.`);
+      }
+      continue; // known-good literal label; skip the general charset check
     }
     if (label === "*") return fail("Wildcard records are not allowed.");
     if (!isValidDnsLabel(label)) {
@@ -152,8 +166,13 @@ export function validateRelativeHost(raw: string): ValidationResult<string> {
  * relativeHostToFqdn("test", "bob.avn", avianNamespace) -> "test.bob.avn.zone."
  * relativeHostToFqdn("api.test", "bob.avn", avianNamespace) -> "api.test.bob.avn.zone."
  */
-export function relativeHostToFqdn(relativeHost: string, name: string, ns: DnsNamespace): string {
-  const hostResult = validateRelativeHost(relativeHost);
+export function relativeHostToFqdn(
+  relativeHost: string,
+  name: string,
+  ns: DnsNamespace,
+  options?: { allowEmailLabels?: boolean },
+): string {
+  const hostResult = validateRelativeHost(relativeHost, options);
   if (!hostResult.ok) throw new Error(hostResult.error);
   const base = sourceNameToBaseFqdn(name, ns);
   return hostResult.value === "@" ? base : `${hostResult.value}.${base}`;

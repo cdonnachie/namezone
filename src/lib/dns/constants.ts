@@ -44,12 +44,13 @@ export type BasicRecordType = (typeof BASIC_RECORD_TYPES)[number];
 
 /**
  * All record types the app will ever write to PowerDNS. TXT is intentionally
- * excluded from BASIC_RECORD_TYPES - it is only ever valid under
- * "_acme-challenge.*" (see isAcmeChallengeHost in validation.ts) and is
- * created exclusively through the dedicated ACME challenge flow, never the
- * general Add Record dialog/endpoint.
+ * excluded from BASIC_RECORD_TYPES - outside the email allowlist it is only
+ * ever valid under "_acme-challenge.*" (see isAcmeChallengeHost in
+ * validation.ts), created through the dedicated ACME challenge flow. MX and
+ * email-shaped TXT (SPF/DKIM/DMARC) are gated per-name by
+ * EMAIL_ALLOWED_NAMES - see src/lib/dns/email.ts.
  */
-export const ALLOWED_RECORD_TYPES = [...BASIC_RECORD_TYPES, "TXT"] as const;
+export const ALLOWED_RECORD_TYPES = [...BASIC_RECORD_TYPES, "TXT", "MX"] as const;
 export type DnsRecordType = (typeof ALLOWED_RECORD_TYPES)[number];
 
 /** The single reserved label that unlocks narrow, ACME-only TXT support. */

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import type { NamespaceConfig } from "@/lib/namespaces/types";
 import { getPowerDnsClient, type PowerDnsRecordSummary } from "@/lib/powerdns/client";
 import { ACME_TXT_DEFAULT_EXPIRY_HOURS, ACME_TXT_TTL } from "./constants";
-import { fqdnToRelativeHost, sourceNameToBaseFqdn } from "./validation";
+import { fqdnToRelativeHost, isAcmeChallengeHost, sourceNameToBaseFqdn } from "./validation";
 
 /**
  * Disables every ACTIVE DNS record (A/AAAA/CNAME/ACME TXT) for a claimed
@@ -210,10 +210,14 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     }
   }
 
-  // Multi-value type (TXT / ACME challenges): many values may coexist per (fqdn, type).
+  // Multi-value type (TXT): many values may coexist per (fqdn, type).
+  // Classify by host: only _acme-challenge.* TXT is an auto-expiring ACME
+  // challenge - email TXT (SPF/DKIM/DMARC) is permanent, so it must NOT be
+  // stamped isAcmeChallenge/expiresAt or it would be swept after 24h.
   const liveTxtKeys = new Set(liveTxt.map((r) => `${r.name}|${r.content}`));
   for (const live of liveTxt) {
     const relativeHost = fqdnToRelativeHost(live.name, name, namespace);
+    const isAcme = isAcmeChallengeHost(relativeHost);
     await prisma.dnsRecord.upsert({
       where: {
         namespace_fqdn_type_value: { namespace: namespace.key, fqdn: live.name, type: "TXT", value: live.content },
@@ -226,10 +230,13 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
         type: "TXT",
         value: live.content,
         ttl: live.ttl,
-        isAcmeChallenge: true,
-        // Discovered outside the app (no known intended lifetime) - give it
-        // the standard default rather than leaving it permanent.
-        expiresAt: new Date(Date.now() + ACME_TXT_DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000),
+        isAcmeChallenge: isAcme,
+        // ACME challenges discovered outside the app have no known intended
+        // lifetime - give them the standard default rather than leaving them
+        // permanent. Email TXT is permanent (no expiry).
+        expiresAt: isAcme
+          ? new Date(Date.now() + ACME_TXT_DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000)
+          : null,
       },
       update: { status: "ACTIVE", disabledReason: null },
     });

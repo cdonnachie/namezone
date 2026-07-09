@@ -54,3 +54,36 @@ describe("PowerDnsClient write guard (defense in depth)", () => {
     await expect(client.upsertRecord("avn.zone", "WWW.AVN.ZONE.", "A", "203.0.113.10")).rejects.toThrow(/reserved/);
   });
 });
+
+describe("TXT rdata quoting/chunking (DKIM keys)", () => {
+  // A configured (non-dry-run) client so patchZone actually builds a PATCH body.
+  const live = new PowerDnsClient({ baseUrl: "http://pdns.test", apiKey: "k", serverId: "localhost" });
+
+  it("splits a >255-char TXT value into multiple quoted strings, and round-trips it back", async () => {
+    const longKey = "v=DKIM1; k=rsa; p=" + "A".repeat(500); // 518 chars, must be chunked
+    let patchedContent = "";
+
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      patchedContent = body.rrsets[0].records[0].content;
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await live.upsertTxtRecords("rxd.zone", "sel._domainkey.craigd.rxd.zone.", [longKey], 300);
+
+    // Each quoted string must be <= 255 content chars, and there must be > 1.
+    const quoted = patchedContent.match(/"((?:[^"\\]|\\.)*)"/g) ?? [];
+    expect(quoted.length).toBeGreaterThan(1);
+    for (const q of quoted) expect(q.length - 2).toBeLessThanOrEqual(255);
+
+    // Now feed that exact chunked content back through a GET and confirm
+    // listAllRecords reassembles the original value.
+    const zone = { rrsets: [{ name: "sel._domainkey.craigd.rxd.zone.", type: "TXT", ttl: 300, records: [{ content: patchedContent, disabled: false }] }] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(zone), { status: 200 })));
+    const records = await live.listAllRecords("rxd.zone");
+    expect(records[0].content).toBe(longKey);
+
+    vi.unstubAllGlobals();
+  });
+});

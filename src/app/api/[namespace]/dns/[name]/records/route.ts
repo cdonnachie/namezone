@@ -9,6 +9,7 @@ import { FIXED_TTL } from "@/lib/dns/constants";
 import { checkRecordLimits, type ExistingBasicRecordSummary } from "@/lib/dns/limits";
 import {
   authorizeFqdnForName,
+  isAcmeChallengeHost,
   relativeHostToFqdn,
   validateCnameTarget,
   validateFqdnLength,
@@ -18,6 +19,13 @@ import {
   validateTypeForHost,
   wouldCreateCnameLoop,
 } from "@/lib/dns/validation";
+import {
+  isDkimHost,
+  isDmarcHost,
+  isEmailEnabledName,
+  validateEmailTxtValue,
+  validateMxValue,
+} from "@/lib/dns/email";
 import { getNamespace, type NamespaceConfig } from "@/lib/namespaces";
 import { requireClaimedNameOwnership } from "@/lib/ownership/sync";
 import { getPowerDnsClient } from "@/lib/powerdns/client";
@@ -67,23 +75,31 @@ export async function POST(
 
     const body = createRecordSchema.parse(await req.json());
 
-    const hostResult = validateRelativeHost(body.hostname);
-    if (!hostResult.ok) {
-      return NextResponse.json({ error: hostResult.error }, { status: 400 });
-    }
-
     const typeResult = validateRecordType(body.type);
     if (!typeResult.ok) {
       return NextResponse.json({ error: typeResult.error }, { status: 400 });
     }
-    const type = typeResult.value as "A" | "AAAA" | "CNAME";
+    const type = typeResult.value;
 
-    const typeForHostResult = validateTypeForHost(hostResult.value, type);
-    if (!typeForHostResult.ok) {
-      return NextResponse.json({ error: typeForHostResult.error }, { status: 400 });
+    // MX and email-shaped TXT (SPF/DKIM/DMARC) are allowlist-gated per name.
+    const emailEnabled = isEmailEnabledName(auth.name);
+    const isEmailType = type === "MX" || type === "TXT";
+    if (isEmailType && !emailEnabled) {
+      return NextResponse.json(
+        { error: "Email records (MX, SPF, DKIM, DMARC) are not enabled for this name." },
+        { status: 403 },
+      );
     }
 
-    const fqdn = relativeHostToFqdn(hostResult.value, auth.name, ns);
+    // Email needs its two underscore host shapes (_dmarc, *._domainkey);
+    // permit them only for allowlisted names.
+    const hostResult = validateRelativeHost(body.hostname, { allowEmailLabels: emailEnabled });
+    if (!hostResult.ok) {
+      return NextResponse.json({ error: hostResult.error }, { status: 400 });
+    }
+    const host = hostResult.value;
+
+    const fqdn = relativeHostToFqdn(host, auth.name, ns, { allowEmailLabels: emailEnabled });
 
     const lengthResult = validateFqdnLength(fqdn);
     if (!lengthResult.ok) {
@@ -95,32 +111,59 @@ export async function POST(
       return NextResponse.json({ error: authFqdn.error }, { status: 403 });
     }
 
-    const valueResult =
-      type === "CNAME"
-        ? validateCnameTarget(body.value, fqdn, auth.name, ns)
-        : validateRecordValue(type, body.value);
-    if (!valueResult.ok) {
-      return NextResponse.json({ error: valueResult.error }, { status: 400 });
-    }
-
-    if (type === "CNAME") {
-      const resolveCname = await buildCnameResolver(ns);
-      if (wouldCreateCnameLoop(fqdn, valueResult.value, resolveCname)) {
+    // Validate the value per type and produce the exact string stored in both
+    // the DB mirror and PowerDNS (for MX that's the "<priority> <target>." rdata).
+    let storedValue: string;
+    if (type === "MX") {
+      if (isAcmeChallengeHost(host) || isDmarcHost(host) || isDkimHost(host)) {
+        return NextResponse.json({ error: "MX records cannot be set at that hostname." }, { status: 400 });
+      }
+      const mx = validateMxValue(body.value, auth.name, ns);
+      if (!mx.ok) return NextResponse.json({ error: mx.error }, { status: 400 });
+      storedValue = mx.value.content;
+    } else if (type === "TXT") {
+      if (isAcmeChallengeHost(host)) {
         return NextResponse.json(
-          { error: "This CNAME would create a loop with an existing record." },
+          { error: 'Use "Add SSL Challenge" for _acme-challenge TXT records.' },
           { status: 400 },
         );
       }
+      const txt = validateEmailTxtValue(host, body.value);
+      if (!txt.ok) return NextResponse.json({ error: txt.error }, { status: 400 });
+      storedValue = txt.value;
+    } else {
+      // A / AAAA / CNAME: the original path, incl. TXT-only-under-ACME guard.
+      const typeForHostResult = validateTypeForHost(host, type);
+      if (!typeForHostResult.ok) {
+        return NextResponse.json({ error: typeForHostResult.error }, { status: 400 });
+      }
+      const valueResult =
+        type === "CNAME"
+          ? validateCnameTarget(body.value, fqdn, auth.name, ns)
+          : validateRecordValue(type, body.value);
+      if (!valueResult.ok) {
+        return NextResponse.json({ error: valueResult.error }, { status: 400 });
+      }
+      if (type === "CNAME") {
+        const resolveCname = await buildCnameResolver(ns);
+        if (wouldCreateCnameLoop(fqdn, valueResult.value, resolveCname)) {
+          return NextResponse.json(
+            { error: "This CNAME would create a loop with an existing record." },
+            { status: 400 },
+          );
+        }
+      }
+      storedValue = valueResult.value;
     }
 
-    // The `type: { in: [...] }` filter guarantees only A/AAAA/CNAME rows come back;
-    // Prisma's types don't narrow on that filter, so assert the already-guaranteed shape.
+    // Limits/exclusivity run over all non-ACME records (A/AAAA/CNAME/MX and
+    // email TXT); ACME TXT lives under its own hosts and its own limit.
     const existingForName = (await prisma.dnsRecord.findMany({
-      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", type: { in: ["A", "AAAA", "CNAME"] } },
+      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", isAcmeChallenge: false },
       select: { relativeHost: true, type: true },
     })) as ExistingBasicRecordSummary[];
     const limitResult = checkRecordLimits(existingForName, {
-      relativeHost: hostResult.value,
+      relativeHost: host,
       type,
     });
     if (!limitResult.ok) {
@@ -134,22 +177,28 @@ export async function POST(
     const isFreshFromUserPerspective = !existingRecord || existingRecord.status === "DISABLED";
 
     const pdns = getPowerDnsClient();
-    await pdns.upsertRecord(ns.dnsZone, fqdn, type, valueResult.value, FIXED_TTL);
+    if (type === "TXT") {
+      // Single email TXT value; upsertTxtRecords handles the quoted/chunked
+      // rdata format (DKIM keys can exceed one 255-byte string).
+      await pdns.upsertTxtRecords(ns.dnsZone, fqdn, [storedValue], FIXED_TTL);
+    } else {
+      await pdns.upsertRecord(ns.dnsZone, fqdn, type, storedValue, FIXED_TTL);
+    }
     await pdns.notify(ns.dnsZone);
 
     const saved = existingRecord
       ? await prisma.dnsRecord.update({
           where: { id: existingRecord.id },
-          data: { value: valueResult.value, ttl: FIXED_TTL, status: "ACTIVE", disabledReason: null },
+          data: { value: storedValue, ttl: FIXED_TTL, status: "ACTIVE", disabledReason: null },
         })
       : await prisma.dnsRecord.create({
           data: {
             namespace: ns.key,
             claimedName: auth.name,
             fqdn,
-            relativeHost: hostResult.value,
+            relativeHost: host,
             type,
-            value: valueResult.value,
+            value: storedValue,
             ttl: FIXED_TTL,
           },
         });
@@ -163,7 +212,7 @@ export async function POST(
       fqdn,
       type,
       oldValue: !isFreshFromUserPerspective ? (existingRecord?.value ?? null) : null,
-      newValue: valueResult.value,
+      newValue: storedValue,
       ipAddress,
       userAgent,
     });
@@ -209,25 +258,30 @@ export async function DELETE(
 
     const body = deleteRecordSchema.parse(await req.json());
 
-    const hostResult = validateRelativeHost(body.hostname);
-    if (!hostResult.ok) {
-      return NextResponse.json({ error: hostResult.error }, { status: 400 });
-    }
     const typeResult = validateRecordType(body.type);
     if (!typeResult.ok) {
       return NextResponse.json({ error: typeResult.error }, { status: 400 });
     }
-    const type = typeResult.value as "A" | "AAAA" | "CNAME";
+    const type = typeResult.value;
 
-    const fqdn = relativeHostToFqdn(hostResult.value, auth.name, ns);
+    // Allow email hosts (_dmarc/_domainkey) so email records stay deletable
+    // even if the name is later removed from the allowlist.
+    const hostResult = validateRelativeHost(body.hostname, { allowEmailLabels: true });
+    if (!hostResult.ok) {
+      return NextResponse.json({ error: hostResult.error }, { status: 400 });
+    }
+
+    const fqdn = relativeHostToFqdn(hostResult.value, auth.name, ns, { allowEmailLabels: true });
 
     const authFqdn = authorizeFqdnForName(fqdn, auth.name, ns);
     if (!authFqdn.ok) {
       return NextResponse.json({ error: authFqdn.error }, { status: 403 });
     }
 
+    // Never delete ACME TXT here - that's the ACME route's job (and this
+    // route's TXT is always a single-value email record).
     const existingRecord = await prisma.dnsRecord.findFirst({
-      where: { namespace: ns.key, fqdn, type, status: "ACTIVE" },
+      where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isAcmeChallenge: false },
     });
     if (!existingRecord) {
       return NextResponse.json({ error: "Record not found." }, { status: 404 });

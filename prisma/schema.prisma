@@ -67,6 +67,7 @@ enum DnsRecordType {
   AAAA
   CNAME
   TXT
+  MX // email-allowlisted names only (EMAIL_ALLOWED_NAMES) - see src/lib/dns/email.ts
 }
 
 enum DnsRecordStatus {
