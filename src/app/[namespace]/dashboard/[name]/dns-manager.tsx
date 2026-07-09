@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, Copy, Globe, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -87,6 +87,19 @@ const EXPIRY_OPTIONS = [
   { label: "7 days", hours: 24 * 7 },
 ];
 
+// GitHub Pages apex hosting: the four A + four AAAA addresses GitHub publishes
+// for a custom apex domain. https://docs.github.com/pages/configuring-a-custom-domain
+const GITHUB_PAGES_RECORDS: { type: "A" | "AAAA"; value: string }[] = [
+  { type: "A", value: "185.199.108.153" },
+  { type: "A", value: "185.199.109.153" },
+  { type: "A", value: "185.199.110.153" },
+  { type: "A", value: "185.199.111.153" },
+  { type: "AAAA", value: "2606:50c0:8000::153" },
+  { type: "AAAA", value: "2606:50c0:8001::153" },
+  { type: "AAAA", value: "2606:50c0:8002::153" },
+  { type: "AAAA", value: "2606:50c0:8003::153" },
+];
+
 function CopyInline({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -157,6 +170,8 @@ function DnsManagerInner({
   const [records, setRecords] = useState<DnsRecordDto[]>(initialRecords);
   const [addOpen, setAddOpen] = useState(false);
   const [acmeOpen, setAcmeOpen] = useState(false);
+  const [ghOpen, setGhOpen] = useState(false);
+  const [ghBusy, setGhBusy] = useState(false);
   const [editing, setEditing] = useState<DnsRecordDto | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
 
@@ -184,6 +199,42 @@ function DnsManagerInner({
     setRecords((prev) => prev.filter((r) => r.id !== record.id));
   }
 
+  // Which GitHub Pages apex records aren't present yet - so the preset only
+  // adds what's missing and can report "already set up" when nothing is.
+  const ghMissing = GITHUB_PAGES_RECORDS.filter(
+    (d) => !records.some((r) => r.relativeHost === "@" && r.type === d.type && r.value === d.value),
+  );
+
+  async function setupGithubPages() {
+    if (ghMissing.length === 0) {
+      toast.info("GitHub Pages records are already set up on your apex (@).");
+      setGhOpen(false);
+      return;
+    }
+    setGhBusy(true);
+    try {
+      // One step-up covers the whole batch: the first write triggers it, and
+      // the cookie it sets carries the rest. Records already added are kept in
+      // state as we go, so a retry after a partial failure only adds the rest.
+      await runWithStepUp(async () => {
+        for (const d of ghMissing) {
+          const { record } = await createOrUpdateRecord(namespace, name, {
+            hostname: "@",
+            type: d.type,
+            value: d.value,
+          });
+          upsertLocal(record);
+        }
+      });
+      toast.success(`Added ${ghMissing.length} GitHub Pages record${ghMissing.length === 1 ? "" : "s"} to your apex (@).`);
+      setGhOpen(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to set up GitHub Pages records.");
+    } finally {
+      setGhBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -204,6 +255,9 @@ function DnsManagerInner({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0">
+            <Button variant="outline" onClick={() => setGhOpen(true)}>
+              <Globe className="size-4" /> GitHub Pages
+            </Button>
             <Dialog
               open={acmeOpen}
               onOpenChange={setAcmeOpen}
@@ -394,6 +448,46 @@ function DnsManagerInner({
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={ghOpen} onOpenChange={(open) => !ghBusy && setGhOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Set up GitHub Pages hosting?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {ghMissing.length === 0 ? (
+                  <>
+                    GitHub Pages&apos; four A and four AAAA records are already on your apex (
+                    <span className="font-mono">@</span>). Nothing to add.
+                  </>
+                ) : (
+                  <>
+                    This adds GitHub Pages&apos; {ghMissing.length} missing address record
+                    {ghMissing.length === 1 ? "" : "s"} to your apex (
+                    <span className="font-mono">@</span>) so <span className="font-mono">{displayZone}</span>{" "}
+                    resolves to GitHub Pages. Your apex must not already have a CNAME. Point your
+                    site&apos;s custom-domain setting at <span className="font-mono">{displayZone}</span>.
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ghBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={ghBusy}
+              onClick={(e) => {
+                // Keep the dialog open while the batch runs; the handler closes it.
+                e.preventDefault();
+                void setupGithubPages();
+              }}
+            >
+              {ghBusy && <Loader2 className="size-4 animate-spin" />}
+              {ghMissing.length === 0 ? "OK" : `Add ${ghMissing.length} record${ghMissing.length === 1 ? "" : "s"}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
