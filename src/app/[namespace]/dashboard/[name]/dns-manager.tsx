@@ -164,11 +164,12 @@ function DnsManagerInner({
   const atHostCapacity = distinctHostCount >= MAX_HOSTNAMES_PER_NAME;
   const atAcmeCapacity = acmeRecords.length >= MAX_ACME_TXT_RECORDS;
 
+  // Match by id, not (fqdn, type, value): multiple values coexist at one
+  // fqdn+type now (several A/MX/TXT), and an edit that changes a CNAME's value
+  // returns the same row id from the server - so id is the only stable key.
   function upsertLocal(record: DnsRecordDto) {
     setRecords((prev) => {
-      const idx = prev.findIndex(
-        (r) => r.fqdn === record.fqdn && r.type === record.type && r.value === record.value,
-      );
+      const idx = prev.findIndex((r) => r.id === record.id);
       if (idx === -1) return [...prev, record];
       const next = [...prev];
       next[idx] = record;
@@ -177,9 +178,7 @@ function DnsManagerInner({
   }
 
   function removeLocal(record: DnsRecordDto) {
-    setRecords((prev) =>
-      prev.filter((r) => !(r.fqdn === record.fqdn && r.type === record.type && r.value === record.value)),
-    );
+    setRecords((prev) => prev.filter((r) => r.id !== record.id));
   }
 
   return (
@@ -256,8 +255,8 @@ function DnsManagerInner({
           <CardTitle className="text-base">DNS records</CardTitle>
           <CardDescription>
             Hostname examples: {EXAMPLES.map((e) => e.host).join(", ")} &mdash; relative to{" "}
-            <span className="font-mono">{zone}</span>. A hostname may have A/AAAA records or a
-            single CNAME, never both.
+            <span className="font-mono">{zone}</span>. A hostname holds either a single CNAME or a
+            mix of the other types, never a CNAME alongside others.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -279,7 +278,7 @@ function DnsManagerInner({
               </TableHeader>
               <TableBody>
                 {basicRecords.map((r) => (
-                  <TableRow key={`${r.fqdn}-${r.type}`}>
+                  <TableRow key={r.id}>
                     <TableCell className="font-mono">{r.relativeHost}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{r.type}</Badge>
@@ -292,10 +291,10 @@ function DnsManagerInner({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {/* MX and email TXT are multi-value per hostname, so
-                          there's no in-place "edit" - change them by deleting
-                          and re-adding, like ACME challenges. */}
-                      {r.type !== "MX" && r.type !== "TXT" && (
+                      {/* Only CNAME is single-value/editable. A/AAAA, MX and
+                          TXT are multi-value per hostname, so they're add/delete
+                          (change by removing and re-adding), like ACME. */}
+                      {r.type === "CNAME" && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -358,7 +357,7 @@ function DnsManagerInner({
               </TableHeader>
               <TableBody>
                 {acmeRecords.map((r) => (
-                  <TableRow key={`${r.fqdn}-${r.value}`}>
+                  <TableRow key={r.id}>
                     <TableCell className="font-mono">{r.relativeHost}</TableCell>
                     <TableCell className="max-w-55 truncate font-mono" title={r.value}>
                       {r.value}
