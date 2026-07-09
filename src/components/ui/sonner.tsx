@@ -10,6 +10,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      // Show concurrent toasts fully expanded (up to visibleToasts) instead
+      // of collapsed into a hover-to-reveal stack - e.g. the connect flow
+      // fires "resolved owner" + "challenge generated" back to back.
+      expand
+      visibleToasts={4}
       className="toaster group"
       icons={{
         success: (
