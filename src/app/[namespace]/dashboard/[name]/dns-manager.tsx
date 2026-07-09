@@ -282,7 +282,16 @@ function DnsManagerInner({
               <TableBody>
                 {basicRecords.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="font-mono">{r.relativeHost}</TableCell>
+                    <TableCell className="font-mono">
+                      <span className="inline-flex items-center gap-1.5">
+                        {r.relativeHost}
+                        {/* A/AAAA/CNAME resolve to a name a user can point at,
+                            so offer a one-click copy of the full FQDN. */}
+                        {(r.type === "A" || r.type === "AAAA" || r.type === "CNAME") && (
+                          <CopyInline value={r.fqdn.replace(/\.$/, "")} />
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{r.type}</Badge>
                     </TableCell>
