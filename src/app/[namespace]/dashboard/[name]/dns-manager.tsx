@@ -151,6 +151,9 @@ function DnsManagerInner({
   initialRecords: DnsRecordDto[];
 }) {
   const runWithStepUp = useStepUp();
+  // `zone` is the absolute FQDN (trailing dot) used internally; show and copy
+  // the browser-friendly form without it.
+  const displayZone = zone.replace(/\.$/, "");
   const [records, setRecords] = useState<DnsRecordDto[]>(initialRecords);
   const [addOpen, setAddOpen] = useState(false);
   const [acmeOpen, setAcmeOpen] = useState(false);
@@ -192,8 +195,8 @@ function DnsManagerInner({
             <CardTitle className="flex flex-wrap items-center gap-2 text-xl">
               <span className="break-all font-mono">{name}</span>
               <span className="text-muted-foreground">&rarr;</span>
-              <span className="break-all font-mono text-primary">{zone}</span>
-              <CopyInline value={zone} />
+              <span className="break-all font-mono text-primary">{displayZone}</span>
+              <CopyInline value={displayZone} />
             </CardTitle>
             <CardDescription className="mt-1">
               {distinctHostCount}/{MAX_HOSTNAMES_PER_NAME} hostnames &middot; {acmeRecords.length}/
@@ -467,12 +470,24 @@ function RecordDialogContent({
   const [error, setError] = useState<string | null>(null);
 
   const nsShape = { tld: zone.split(".")[0], dnsZone: zone.replace(/\.$/, "") };
+  const zoneBase = zone.replace(/\.$/, ""); // e.g. "craigd.rxd.zone"
+  const parentZone = zoneBase.split(".").slice(1).join("."); // e.g. "rxd.zone"
+  const tld = parentZone.split(".")[0]; // e.g. "rxd"
 
   const previewFqdn = useMemo(() => {
     const host = hostname.trim().toLowerCase();
     if (!host) return zone;
     return host === "@" ? zone : `${host}.${zone}`;
   }, [hostname, zone]);
+
+  // People sometimes type the whole domain (e.g. "www.rxd.zone") here, expecting
+  // it to BE the final name - but the hostname is relative and gets your zone
+  // appended, so that becomes "www.rxd.zone.craigd.rxd.zone.". Nudge them.
+  const normalizedHost = hostname.trim().toLowerCase().replace(/\.$/, "");
+  const looksLikeFullDomain =
+    normalizedHost !== "" &&
+    normalizedHost !== "@" &&
+    (normalizedHost.endsWith(".zone") || normalizedHost.endsWith(`.${tld}`) || normalizedHost.includes(parentZone));
 
   async function handleSave() {
     setError(null);
@@ -544,7 +559,21 @@ function RecordDialogContent({
             disabled={!!existing}
             className="font-mono"
           />
+          <p className="text-xs text-muted-foreground">
+            Just the part before your domain (e.g. <span className="font-mono">www</span>), or{" "}
+            <span className="font-mono">@</span> for the domain itself. Your name is added
+            automatically:
+          </p>
           <p className="font-mono text-xs text-muted-foreground">{previewFqdn}</p>
+          {looksLikeFullDomain && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Looks like you included your domain. You don&apos;t need to &mdash; enter just{" "}
+              <span className="font-mono">www</span> (not{" "}
+              <span className="font-mono">www.{parentZone}</span>), or{" "}
+              <span className="font-mono">@</span> for <span className="font-mono">{zoneBase}</span>{" "}
+              itself.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
