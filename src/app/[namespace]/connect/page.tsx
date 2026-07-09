@@ -28,7 +28,12 @@ export default async function ConnectPage({
           unlock DNS management for its namespace.
         </p>
       </div>
-      <ConnectFlow namespace={ns.key} chainName={ns.chainName} addressPlaceholder={ns.addressPlaceholder} />
+      <ConnectFlow
+        namespace={ns.key}
+        chainName={ns.chainName}
+        tld={ns.tld}
+        addressPlaceholder={ns.addressPlaceholder}
+      />
     </div>
   );
 }

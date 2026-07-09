@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { requestChallenge, verifyChallenge, ApiError } from "@/lib/client/api";
+import { requestChallenge, resolveOwner, verifyChallenge, ApiError } from "@/lib/client/api";
+import { validateSourceName } from "@/lib/dns/validation";
 import { buildPhotonicConnectUrl } from "@/lib/ownership/radiant/connect-link";
 
 function CopyButton({ value }: { value: string }) {
@@ -33,16 +34,23 @@ function CopyButton({ value }: { value: string }) {
 export function ConnectFlow({
   namespace,
   chainName,
+  tld,
   addressPlaceholder,
 }: {
   namespace: string;
   chainName: string;
+  tld: string;
   addressPlaceholder: string;
 }) {
   return (
     <Card>
       <CardContent className="pt-6">
-        <ManualVerification namespace={namespace} chainName={chainName} addressPlaceholder={addressPlaceholder} />
+        <ManualVerification
+          namespace={namespace}
+          chainName={chainName}
+          tld={tld}
+          addressPlaceholder={addressPlaceholder}
+        />
       </CardContent>
     </Card>
   );
@@ -51,13 +59,16 @@ export function ConnectFlow({
 function ManualVerification({
   namespace,
   chainName,
+  tld,
   addressPlaceholder,
 }: {
   namespace: string;
   chainName: string;
+  tld: string;
   addressPlaceholder: string;
 }) {
   const [address, setAddress] = useState("");
+  const [resolvedName, setResolvedName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
   const [sharedComputer, setSharedComputer] = useState(false);
@@ -66,7 +77,21 @@ function ManualVerification({
   async function handleRequestChallenge() {
     setLoading("challenge");
     try {
-      const res = await requestChallenge(namespace, address.trim());
+      // Accept a name (e.g. "bob.rxd") in place of an address: resolve it
+      // to the current on-chain owner first, then challenge that address.
+      let addr = address.trim();
+      const asName = validateSourceName(addr, { tld });
+      if (asName.ok) {
+        const resolved = await resolveOwner(namespace, asName.value);
+        addr = resolved.address;
+        setAddress(resolved.address);
+        setResolvedName(resolved.name);
+        toast.success(`${resolved.name} is owned by ${resolved.address}`);
+      } else {
+        setResolvedName(null);
+      }
+
+      const res = await requestChallenge(namespace, addr);
       setMessage(res.message);
       toast.success(`Challenge generated. Sign it with your ${chainName} wallet.`);
     } catch (err) {
@@ -98,15 +123,29 @@ function ManualVerification({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="address">{chainName} address</Label>
+        <Label htmlFor="address">
+          {chainName} address or name
+        </Label>
         <Input
           id="address"
-          placeholder={addressPlaceholder}
+          placeholder={`${addressPlaceholder} or yourname.${tld}`}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           disabled={!!message}
           className="font-mono"
         />
+        {resolvedName ? (
+          <p className="text-xs text-muted-foreground">
+            Resolved <span className="font-mono">{resolvedName}</span> to its current owner -
+            sign with this address&apos;s key.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            You can enter your {chainName} name (e.g.{" "}
+            <span className="font-mono">yourname.{tld}</span>) and we&apos;ll look up the owning
+            address for you.
+          </p>
+        )}
       </div>
 
       {!message ? (
@@ -125,7 +164,7 @@ function ManualVerification({
               <Label>Challenge message</Label>
               <CopyButton value={message} />
             </div>
-            <pre className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            <pre className="whitespace-pre-wrap wrap-anywhere rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
               {message}
             </pre>
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

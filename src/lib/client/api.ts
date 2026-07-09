@@ -31,6 +31,13 @@ export function requestChallenge(namespace: string, address: string) {
   });
 }
 
+/** Resolves a source name (e.g. "bob.rxd") to its current on-chain owner address. */
+export function resolveOwner(namespace: string, name: string) {
+  return request<{ name: string; address: string }>(
+    `/api/${namespace}/resolve?name=${encodeURIComponent(name)}`,
+  );
+}
+
 export interface VerifyResponse {
   address: string;
 }
