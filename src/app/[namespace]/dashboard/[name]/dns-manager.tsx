@@ -171,7 +171,6 @@ function DnsManagerInner({
   const [addOpen, setAddOpen] = useState(false);
   const [acmeOpen, setAcmeOpen] = useState(false);
   const [ghOpen, setGhOpen] = useState(false);
-  const [ghBusy, setGhBusy] = useState(false);
   const [editing, setEditing] = useState<DnsRecordDto | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
 
@@ -199,41 +198,6 @@ function DnsManagerInner({
     setRecords((prev) => prev.filter((r) => r.id !== record.id));
   }
 
-  // Which GitHub Pages apex records aren't present yet - so the preset only
-  // adds what's missing and can report "already set up" when nothing is.
-  const ghMissing = GITHUB_PAGES_RECORDS.filter(
-    (d) => !records.some((r) => r.relativeHost === "@" && r.type === d.type && r.value === d.value),
-  );
-
-  async function setupGithubPages() {
-    if (ghMissing.length === 0) {
-      toast.info("GitHub Pages records are already set up on your apex (@).");
-      setGhOpen(false);
-      return;
-    }
-    setGhBusy(true);
-    try {
-      // One step-up covers the whole batch: the first write triggers it, and
-      // the cookie it sets carries the rest. Records already added are kept in
-      // state as we go, so a retry after a partial failure only adds the rest.
-      await runWithStepUp(async () => {
-        for (const d of ghMissing) {
-          const { record } = await createOrUpdateRecord(namespace, name, {
-            hostname: "@",
-            type: d.type,
-            value: d.value,
-          });
-          upsertLocal(record);
-        }
-      });
-      toast.success(`Added ${ghMissing.length} GitHub Pages record${ghMissing.length === 1 ? "" : "s"} to your apex (@).`);
-      setGhOpen(false);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to set up GitHub Pages records.");
-    } finally {
-      setGhBusy(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -255,9 +219,22 @@ function DnsManagerInner({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0">
-            <Button variant="outline" onClick={() => setGhOpen(true)}>
-              <Globe className="size-4" /> GitHub Pages
-            </Button>
+            <Dialog open={ghOpen} onOpenChange={setGhOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Globe className="size-4" /> GitHub Pages
+                </Button>
+              </DialogTrigger>
+              <GithubPagesDialogContent
+                key={ghOpen ? "open" : "closed"}
+                namespace={namespace}
+                name={name}
+                zone={zone}
+                records={records}
+                onRecordSaved={upsertLocal}
+                onClose={() => setGhOpen(false)}
+              />
+            </Dialog>
             <Dialog
               open={acmeOpen}
               onOpenChange={setAcmeOpen}
@@ -449,46 +426,6 @@ function DnsManagerInner({
         </CardContent>
       </Card>
 
-      <AlertDialog open={ghOpen} onOpenChange={(open) => !ghBusy && setGhOpen(open)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Set up GitHub Pages hosting?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div>
-                {ghMissing.length === 0 ? (
-                  <>
-                    GitHub Pages&apos; four A and four AAAA records are already on your apex (
-                    <span className="font-mono">@</span>). Nothing to add.
-                  </>
-                ) : (
-                  <>
-                    This adds GitHub Pages&apos; {ghMissing.length} missing address record
-                    {ghMissing.length === 1 ? "" : "s"} to your apex (
-                    <span className="font-mono">@</span>) so <span className="font-mono">{displayZone}</span>{" "}
-                    resolves to GitHub Pages. Your apex must not already have a CNAME. Point your
-                    site&apos;s custom-domain setting at <span className="font-mono">{displayZone}</span>.
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={ghBusy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={ghBusy}
-              onClick={(e) => {
-                // Keep the dialog open while the batch runs; the handler closes it.
-                e.preventDefault();
-                void setupGithubPages();
-              }}
-            >
-              {ghBusy && <Loader2 className="size-4 animate-spin" />}
-              {ghMissing.length === 0 ? "OK" : `Add ${ghMissing.length} record${ghMissing.length === 1 ? "" : "s"}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -549,6 +486,197 @@ const VALUE_PLACEHOLDER: Record<EditableRecordType, string> = {
   MX: "10 mail.example.com",
   TXT: "v=spf1 include:example.com -all",
 };
+
+// Remembers the GitHub username across visits (per browser) so the preset can
+// prefill it - the same account is used for all of a person's names.
+const GITHUB_USER_STORAGE_KEY = "namezone_github_user";
+
+// GitHub usernames: 1-39 chars, alphanumeric or single hyphens, no leading/
+// trailing hyphen and no consecutive hyphens.
+function isValidGithubUser(user: string): boolean {
+  return /^[a-z\d](?:-(?=[a-z\d])|[a-z\d]){0,38}$/i.test(user);
+}
+
+/**
+ * One-click GitHub Pages setup. At the apex (@) a custom domain must be address
+ * records, so it writes GitHub's four A + four AAAA IPs (only the ones missing).
+ * At a subdomain GitHub recommends a single CNAME to <username>.github.io, so it
+ * writes that instead - cleaner, and it auto-follows if GitHub changes IPs.
+ */
+function GithubPagesDialogContent({
+  namespace,
+  name,
+  zone,
+  records,
+  onRecordSaved,
+  onClose,
+}: {
+  namespace: string;
+  name: string;
+  zone: string;
+  records: DnsRecordDto[];
+  onRecordSaved: (record: DnsRecordDto) => void;
+  onClose: () => void;
+}) {
+  const runWithStepUp = useStepUp();
+  const [host, setHost] = useState("@");
+  // Prefill the GitHub username from the last time they used this (same account
+  // across all their names) - a convenience only, so localStorage, not the DB.
+  const [ghUser, setGhUser] = useState(() =>
+    typeof window === "undefined" ? "" : (localStorage.getItem(GITHUB_USER_STORAGE_KEY) ?? ""),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const displayZone = zone.replace(/\.$/, "");
+  const hostResult = validateRelativeHost(host);
+  const relHost = hostResult.ok ? hostResult.value : host.trim().toLowerCase();
+  const isApex = relHost === "@";
+  const targetFqdn = isApex ? displayZone : `${relHost}.${displayZone}`;
+  const ghUserValue = ghUser.trim().toLowerCase();
+  const cnameTarget = `${ghUserValue || "<username>"}.github.io.`;
+
+  // Apex: which of the 8 address records aren't already present.
+  const ghMissing = GITHUB_PAGES_RECORDS.filter(
+    (d) => !records.some((r) => r.relativeHost === relHost && r.type === d.type && r.value === d.value),
+  );
+  // A CNAME can't coexist with anything else, so flag the conflicts up front.
+  const apexHasCname = records.some((r) => r.relativeHost === "@" && r.type === "CNAME");
+  const subHostHasOthers = records.some((r) => r.relativeHost === relHost && r.type !== "CNAME");
+
+  async function handleSubmit() {
+    setError(null);
+    if (!hostResult.ok) return setError(hostResult.error);
+    if (isAcmeChallengeHost(relHost)) {
+      return setError('Pick a normal host - "_acme-challenge" is managed under SSL challenges.');
+    }
+    if (isApex) {
+      if (ghMissing.length === 0) {
+        toast.info("GitHub Pages records are already set up on your apex (@).");
+        return onClose();
+      }
+    } else if (!isValidGithubUser(ghUserValue)) {
+      return setError("Enter your GitHub username (e.g. octocat).");
+    }
+
+    setSaving(true);
+    try {
+      if (isApex) {
+        // One step-up covers the whole batch; records added are kept in state as
+        // we go, so a retry after a partial failure only adds the rest.
+        await runWithStepUp(async () => {
+          for (const d of ghMissing) {
+            const { record } = await createOrUpdateRecord(namespace, name, {
+              hostname: "@",
+              type: d.type,
+              value: d.value,
+            });
+            onRecordSaved(record);
+          }
+        });
+        toast.success(
+          `Added ${ghMissing.length} GitHub Pages record${ghMissing.length === 1 ? "" : "s"} to your apex (@).`,
+        );
+      } else {
+        const { record } = await runWithStepUp(() =>
+          createOrUpdateRecord(namespace, name, {
+            hostname: relHost,
+            type: "CNAME",
+            value: `${ghUserValue}.github.io.`,
+          }),
+        );
+        onRecordSaved(record);
+        localStorage.setItem(GITHUB_USER_STORAGE_KEY, ghUserValue);
+        toast.success(`Pointed ${targetFqdn} at ${ghUserValue}.github.io.`);
+      }
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to set up GitHub Pages.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Set up GitHub Pages</DialogTitle>
+        <DialogDescription>
+          Point a host at GitHub Pages. The apex needs address records; subdomains use a CNAME.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="gh-host">Host</Label>
+          <Input
+            id="gh-host"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+            placeholder="@"
+            className="font-mono"
+          />
+          <p className="text-xs text-muted-foreground">
+            <span className="font-mono">@</span> for {displayZone} itself, or a subdomain like{" "}
+            <span className="font-mono">www</span>. Target: <span className="font-mono">{targetFqdn}</span>
+          </p>
+        </div>
+
+        {!isApex && (
+          <div className="space-y-2">
+            <Label htmlFor="gh-user">GitHub username</Label>
+            <Input
+              id="gh-user"
+              value={ghUser}
+              onChange={(e) => setGhUser(e.target.value)}
+              placeholder="octocat"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              Creates <span className="font-mono">{targetFqdn}</span> &rarr;{" "}
+              <span className="font-mono">{cnameTarget}</span> (a CNAME). Set{" "}
+              <span className="font-mono">{targetFqdn}</span> as the custom domain on your Pages repo.
+            </p>
+          </div>
+        )}
+
+        {isApex && (
+          <p className="text-xs text-muted-foreground">
+            {ghMissing.length === 0
+              ? "All eight GitHub Pages address records are already present."
+              : `Adds ${ghMissing.length} missing address record${ghMissing.length === 1 ? "" : "s"} (GitHub's four A + four AAAA IPs). Set ${displayZone} as the custom domain on your Pages repo.`}
+          </p>
+        )}
+
+        {isApex && apexHasCname && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Your apex has a CNAME, which can&apos;t coexist with address records. Remove it first.
+          </p>
+        )}
+        {!isApex && subHostHasOthers && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            <span className="font-mono">{relHost}</span> already has other records; a CNAME can&apos;t
+            coexist with them. Remove them first.
+          </p>
+        )}
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={saving}>
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          {isApex
+            ? ghMissing.length === 0
+              ? "Already set up"
+              : `Add ${ghMissing.length} record${ghMissing.length === 1 ? "" : "s"}`
+            : "Add CNAME"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
 
 function RecordDialogContent({
   namespace,
