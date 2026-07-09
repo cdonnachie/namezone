@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db";
  * scoped to the browser that actually signed (a confirmation on your home
  * PC doesn't unlock a stale session elsewhere), and expires on its own.
  */
-export const STEP_UP_COOKIE_NAME = "ans_stepup";
+export const STEP_UP_COOKIE_NAME = "namezone_stepup";
 export const STEP_UP_DURATION_SECONDS = 60 * 10; // 10 minutes
 
 function getSecretKey(): Uint8Array {

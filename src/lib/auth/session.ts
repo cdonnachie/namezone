@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-export const SESSION_COOKIE_NAME = "ans_session";
+export const SESSION_COOKIE_NAME = "namezone_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 12; // 12 hours
 // "Shared computer" opt-in at sign-in: a much shorter JWT, held in a
 // browser-session cookie (no Max-Age) so it also dies when the browser
