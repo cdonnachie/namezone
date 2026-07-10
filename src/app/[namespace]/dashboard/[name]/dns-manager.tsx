@@ -593,7 +593,17 @@ function DnsManagerInner({
                     <TableCell>
                       <Badge variant="outline">{r.type}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono">{r.value}</TableCell>
+                    <TableCell className="font-mono">
+                      {/* Long values (DKIM CNAME targets, SPF) would otherwise
+                          force the whole table to scroll - truncate with the
+                          full value on hover and a copy button. */}
+                      <span className="flex items-center gap-1.5">
+                        <span className="max-w-55 truncate lg:max-w-80" title={r.value}>
+                          {r.value}
+                        </span>
+                        <CopyInline value={r.value} />
+                      </span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{r.ttl}s</TableCell>
                     <TableCell>
                       <PropagationStatus namespace={namespace} name={name} record={r} />
