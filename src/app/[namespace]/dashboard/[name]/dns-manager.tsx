@@ -14,8 +14,10 @@ import {
   Radar,
   Server,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -165,28 +167,39 @@ function PropagationStatus({ state, onCheck }: { state: CheckState | undefined; 
   return (
     <span className="inline-flex items-center gap-1.5">
       {done ? (
-        done.matched ? (
-          <Badge
-            className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15"
-            title={`A public resolver sees this exact value. It answered: ${done.answers.join(", ")}`}
-          >
-            Public
-          </Badge>
-        ) : done.visible ? (
-          <Badge
-            className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
-            title={`The public resolver answered: ${done.answers.join(", ")} - old values can stay cached for up to the TTL (~5 min).`}
-          >
-            Mismatch
-          </Badge>
-        ) : (
-          <Badge
-            className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
-            title="The public resolver returned no answer for this record yet - new records typically appear within a few minutes."
-          >
-            Propagating
-          </Badge>
-        )
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {done.matched ? (
+              <Badge className="cursor-default bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15">
+                Public
+              </Badge>
+            ) : (
+              <Badge className="cursor-default bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15">
+                {done.visible ? "Mismatch" : "Propagating"}
+              </Badge>
+            )}
+          </TooltipTrigger>
+          <TooltipContent className="max-w-80 text-wrap text-left">
+            {done.matched ? (
+              <p>A public resolver sees this exact value.</p>
+            ) : done.visible ? (
+              <p>
+                The public resolver is showing a different value &mdash; old values can stay cached
+                for up to ~5 minutes (the TTL).
+              </p>
+            ) : (
+              <p>
+                No public answer for this record yet &mdash; new records typically appear within a
+                few minutes.
+              </p>
+            )}
+            {done.answers.length > 0 && (
+              <p className="mt-1.5 font-mono text-xs">
+                Resolver answered: {done.answers.join(", ")}
+              </p>
+            )}
+          </TooltipContent>
+        </Tooltip>
       ) : (
         <Badge className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15">
           Synced
@@ -314,6 +327,60 @@ function RecentChanges({
   );
 }
 
+/**
+ * Goal-oriented setup cards ("host a website", "point to my server", "learn").
+ * Shown inline when a name has no records yet, and reachable any time after
+ * that via the "Quick setup" dialog in the header.
+ */
+function GoalCards({
+  namespace,
+  zoneLabel,
+  onHostWebsite,
+  onPointServer,
+}: {
+  namespace: string;
+  zoneLabel: string;
+  onHostWebsite: () => void;
+  onPointServer: () => void;
+}) {
+  return (
+    <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-3">
+      <button
+        type="button"
+        onClick={onHostWebsite}
+        className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+      >
+        <Globe className="size-5 text-primary" />
+        <span className="text-sm font-medium">Host a website</span>
+        <span className="text-xs text-muted-foreground">
+          Free hosting via GitHub Pages - we add the records for you.
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onPointServer}
+        className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+      >
+        <Server className="size-5 text-primary" />
+        <span className="text-sm font-medium">Point to my own server</span>
+        <span className="text-xs text-muted-foreground">
+          Have a VPS or home server? Point {zoneLabel} at its IP address.
+        </span>
+      </button>
+      <Link
+        href={`/${namespace}/help`}
+        className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+      >
+        <BookOpen className="size-5 text-primary" />
+        <span className="text-sm font-medium">Learn what&apos;s possible</span>
+        <span className="text-xs text-muted-foreground">
+          Websites, subdomains, SSL certificates and more - see the guide.
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 type DeleteTarget =
   | { kind: "basic"; record: DnsRecordDto }
   | { kind: "acme"; record: DnsRecordDto };
@@ -367,6 +434,7 @@ function DnsManagerInner({
   const [addOpen, setAddOpen] = useState(false);
   const [acmeOpen, setAcmeOpen] = useState(false);
   const [ghOpen, setGhOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [editing, setEditing] = useState<DnsRecordDto | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   // Pre-fills the Add Record dialog when opened from a "get started" goal
@@ -483,12 +551,38 @@ function DnsManagerInner({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0">
-            <Dialog open={ghOpen} onOpenChange={setGhOpen}>
+            <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <Globe className="size-4" /> GitHub Pages
+                  <Sparkles className="size-4" /> Quick setup
                 </Button>
               </DialogTrigger>
+              <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>What do you want to do with {displayZone}?</DialogTitle>
+                  <DialogDescription>
+                    Pick a goal and we&apos;ll set up the right records &mdash; no DNS knowledge
+                    needed.
+                  </DialogDescription>
+                </DialogHeader>
+                <GoalCards
+                  namespace={namespace}
+                  zoneLabel={displayZone}
+                  onHostWebsite={() => {
+                    setQuickOpen(false);
+                    setGhOpen(true);
+                  }}
+                  onPointServer={() => {
+                    setQuickOpen(false);
+                    setPreset({ hostname: "@", type: "A" });
+                    setAddOpen(true);
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+            {/* Controlled, trigger-less: opened from the Quick setup goals and
+                the empty-state cards. */}
+            <Dialog open={ghOpen} onOpenChange={setGhOpen}>
               <GithubPagesDialogContent
                 key={ghOpen ? "open" : "closed"}
                 namespace={namespace}
@@ -560,7 +654,8 @@ function DnsManagerInner({
             <CardDescription className="mt-1.5">
               Hostname examples: {EXAMPLES.map((e) => e.host).join(", ")} &mdash; relative to{" "}
               <span className="font-mono">{zone}</span>. A hostname holds either a single CNAME or a
-              mix of the other types, never a CNAME alongside others.
+              mix of the other types, never a CNAME alongside others. All records use a fixed 300s
+              (5 minute) TTL.
             </CardDescription>
           </div>
           {basicRecords.length > 0 && (
@@ -584,43 +679,15 @@ function DnsManagerInner({
               <p className="mb-6 text-center text-sm text-muted-foreground">
                 Pick a goal and we&apos;ll set up the right records - no DNS knowledge needed.
               </p>
-              <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => setGhOpen(true)}
-                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
-                >
-                  <Globe className="size-5 text-primary" />
-                  <span className="text-sm font-medium">Host a website</span>
-                  <span className="text-xs text-muted-foreground">
-                    Free hosting via GitHub Pages - we add the records for you.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreset({ hostname: "@", type: "A" });
-                    setAddOpen(true);
-                  }}
-                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
-                >
-                  <Server className="size-5 text-primary" />
-                  <span className="text-sm font-medium">Point to my own server</span>
-                  <span className="text-xs text-muted-foreground">
-                    Have a VPS or home server? Point {displayZone} at its IP address.
-                  </span>
-                </button>
-                <Link
-                  href={`/${namespace}/help`}
-                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
-                >
-                  <BookOpen className="size-5 text-primary" />
-                  <span className="text-sm font-medium">Learn what&apos;s possible</span>
-                  <span className="text-xs text-muted-foreground">
-                    Websites, subdomains, SSL certificates and more - see the guide.
-                  </span>
-                </Link>
-              </div>
+              <GoalCards
+                namespace={namespace}
+                zoneLabel={displayZone}
+                onHostWebsite={() => setGhOpen(true)}
+                onPointServer={() => {
+                  setPreset({ hostname: "@", type: "A" });
+                  setAddOpen(true);
+                }}
+              />
             </div>
           ) : (
             <Table>
@@ -629,7 +696,6 @@ function DnsManagerInner({
                   <TableHead>Hostname</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Value</TableHead>
-                  <TableHead>TTL</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -661,7 +727,6 @@ function DnsManagerInner({
                         <CopyInline value={r.value} />
                       </span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{r.ttl}s</TableCell>
                     <TableCell>
                       <PropagationStatus state={checks[r.id]} onCheck={() => checkOne(r)} />
                     </TableCell>
