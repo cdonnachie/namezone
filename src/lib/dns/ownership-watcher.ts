@@ -40,9 +40,9 @@ export async function sweepAllClaimedNamesForOwnershipChanges(): Promise<Ownersh
 
   const result: OwnershipSweepResult = { checked: 0, transferred: [], errors: [] };
 
-  for (const record of claimedNames) {
+  async function checkOne(record: (typeof claimedNames)[number]): Promise<void> {
     const namespace = namespacesByKey.get(record.namespace);
-    if (!namespace || !namespace.enabled) continue;
+    if (!namespace || !namespace.enabled) return;
 
     result.checked++;
 
@@ -55,7 +55,7 @@ export async function sweepAllClaimedNamesForOwnershipChanges(): Promise<Ownersh
         name: record.name,
         error: err instanceof Error ? err.message : String(err),
       });
-      continue;
+      return;
     }
 
     const normalizedCurrentOwner = currentOwner ?? "";
@@ -63,7 +63,7 @@ export async function sweepAllClaimedNamesForOwnershipChanges(): Promise<Ownersh
 
     if (normalizedCurrentOwner === record.ownerAddress) {
       await prisma.claimedName.update({ where: { id: record.id }, data: { lastOwnershipCheckAt: now } });
-      continue;
+      return;
     }
 
     await disableClaimedNameRecords(namespace, record.name, record.ownerAddress);
@@ -79,6 +79,20 @@ export async function sweepAllClaimedNamesForOwnershipChanges(): Promise<Ownersh
     });
     result.transferred.push(`${namespace.key}/${record.name}`);
   }
+
+  // The on-chain lookups dominate the sweep's runtime, so run a small pool of
+  // them concurrently (sequential otherwise means n × network-RTT). Kept
+  // modest by default to avoid hammering the indexer/RPC nodes; tune with
+  // OWNERSHIP_SWEEP_CONCURRENCY.
+  const concurrency = Math.max(1, Number(process.env.OWNERSHIP_SWEEP_CONCURRENCY ?? 5) || 1);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < claimedNames.length) {
+      const record = claimedNames[cursor++];
+      await checkOne(record);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, claimedNames.length) }, worker));
 
   return result;
 }
