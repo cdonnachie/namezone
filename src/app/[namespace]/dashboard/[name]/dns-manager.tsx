@@ -118,6 +118,17 @@ const GITHUB_PAGES_RECORDS: { type: "A" | "AAAA"; value: string }[] = [
   { type: "AAAA", value: "2606:50c0:8003::153" },
 ];
 
+/**
+ * First common subdomain with no records yet - used to suggest a sensible
+ * hostname when the apex is already taken. Falls back to "" (user types one).
+ */
+function firstFreeSubdomain(records: DnsRecordDto[]): string {
+  for (const candidate of ["www", "app", "site", "blog"]) {
+    if (!records.some((r) => r.relativeHost === candidate)) return candidate;
+  }
+  return "";
+}
+
 // Plain-language, novice-facing explanation for each record type, shown under
 // the type picker so people choose by goal rather than by acronym.
 const TYPE_EXPLANATIONS: Record<EditableRecordType, string> = {
@@ -179,7 +190,7 @@ function PropagationStatus({ state, onCheck }: { state: CheckState | undefined; 
               </Badge>
             )}
           </TooltipTrigger>
-          <TooltipContent className="max-w-80 text-wrap text-left">
+          <TooltipContent className="flex max-w-80 flex-col gap-1.5 px-3.5 py-2.5 text-wrap text-left">
             {done.matched ? (
               <p>A public resolver sees this exact value.</p>
             ) : done.visible ? (
@@ -194,9 +205,7 @@ function PropagationStatus({ state, onCheck }: { state: CheckState | undefined; 
               </p>
             )}
             {done.answers.length > 0 && (
-              <p className="mt-1.5 font-mono text-xs">
-                Resolver answered: {done.answers.join(", ")}
-              </p>
+              <p className="font-mono text-xs">Resolver answered: {done.answers.join(", ")}</p>
             )}
           </TooltipContent>
         </Tooltip>
@@ -468,6 +477,17 @@ function DnsManagerInner({
     setRecords((prev) => prev.filter((r) => r.id !== record.id));
   }
 
+  // "Point to my own server" goal: default to @ only while the apex isn't
+  // already pointing somewhere - otherwise suggest a free subdomain so people
+  // don't collide with (say) their GitHub Pages records.
+  function openPointServer() {
+    const apexPointed = basicRecords.some(
+      (r) => r.relativeHost === "@" && (r.type === "A" || r.type === "AAAA" || r.type === "CNAME"),
+    );
+    setPreset({ hostname: apexPointed ? firstFreeSubdomain(basicRecords) : "@", type: "A" });
+    setAddOpen(true);
+  }
+
   async function checkOne(record: DnsRecordDto) {
     setChecks((prev) => ({ ...prev, [record.id]: "checking" }));
     try {
@@ -574,8 +594,7 @@ function DnsManagerInner({
                   }}
                   onPointServer={() => {
                     setQuickOpen(false);
-                    setPreset({ hostname: "@", type: "A" });
-                    setAddOpen(true);
+                    openPointServer();
                   }}
                 />
               </DialogContent>
@@ -683,10 +702,7 @@ function DnsManagerInner({
                 namespace={namespace}
                 zoneLabel={displayZone}
                 onHostWebsite={() => setGhOpen(true)}
-                onPointServer={() => {
-                  setPreset({ hostname: "@", type: "A" });
-                  setAddOpen(true);
-                }}
+                onPointServer={openPointServer}
               />
             </div>
           ) : (
@@ -918,7 +934,16 @@ function GithubPagesDialogContent({
   onClose: () => void;
 }) {
   const runWithStepUp = useStepUp();
-  const [host, setHost] = useState("@");
+  // Start at the apex unless it's already fully set up (or blocked by a
+  // CNAME) - then suggest a free subdomain, since the likely next goal is
+  // pointing www/app at another Pages site rather than re-doing @.
+  const [host, setHost] = useState(() => {
+    const apexDone = GITHUB_PAGES_RECORDS.every((d) =>
+      records.some((r) => r.relativeHost === "@" && r.type === d.type && r.value === d.value),
+    );
+    const apexBlocked = records.some((r) => r.relativeHost === "@" && r.type === "CNAME");
+    return apexDone || apexBlocked ? firstFreeSubdomain(records) : "@";
+  });
   // Prefill the GitHub username from the last time they used this (same account
   // across all their names) - a convenience only, so localStorage, not the DB.
   const [ghUser, setGhUser] = useState(() =>
