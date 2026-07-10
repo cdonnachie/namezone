@@ -22,9 +22,9 @@ const VERIFY_TYPES: readonly DohRecordType[] = ["A", "AAAA", "CNAME", "MX", "TXT
  *
  * Two modes:
  *  - { hostname, type, value }: check one record.
- *  - { all: true }: check every active (non-ACME) record for this name in one
- *    request. Lookups are grouped per (fqdn, type) rrset, so e.g. four apex A
- *    records cost a single DNS query.
+ *  - { all: true }: check every active record for this name (ACME challenge
+ *    TXTs included) in one request. Lookups are grouped per (fqdn, type)
+ *    rrset, so e.g. four apex A records cost a single DNS query.
  */
 export async function POST(
   req: Request,
@@ -90,8 +90,10 @@ export async function POST(
 }
 
 async function verifyAllRecords(namespaceKey: string, claimedName: string) {
+  // Includes ACME challenge TXTs - "is my challenge visible yet?" is the
+  // propagation question people ask most (certbot waits on exactly this).
   const records = await prisma.dnsRecord.findMany({
-    where: { namespace: namespaceKey, claimedName, status: "ACTIVE", isAcmeChallenge: false },
+    where: { namespace: namespaceKey, claimedName, status: "ACTIVE" },
   });
 
   // One lookup per (fqdn, type) rrset - every value at that name/type comes

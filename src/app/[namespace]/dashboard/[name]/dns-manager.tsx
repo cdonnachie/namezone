@@ -514,7 +514,7 @@ function DnsManagerInner({
     setCheckingAll(true);
     setChecks((prev) => {
       const next = { ...prev };
-      for (const r of basicRecords) next[r.id] = "checking";
+      for (const r of records) next[r.id] = "checking"; // basic + ACME rows
       return next;
     });
     try {
@@ -522,7 +522,7 @@ function DnsManagerInner({
       setChecks((prev) => {
         const next = { ...prev };
         // Clear spinners for anything the server didn't report on.
-        for (const r of basicRecords) if (next[r.id] === "checking") delete next[r.id];
+        for (const r of records) if (next[r.id] === "checking") delete next[r.id];
         for (const r of results) {
           if (!r.failed) next[r.id] = { visible: r.visible, matched: r.matched, answers: r.answers };
         }
@@ -541,7 +541,7 @@ function DnsManagerInner({
     } catch (err) {
       setChecks((prev) => {
         const next = { ...prev };
-        for (const r of basicRecords) if (next[r.id] === "checking") delete next[r.id];
+        for (const r of records) if (next[r.id] === "checking") delete next[r.id];
         return next;
       });
       toast.error(err instanceof ApiError ? err.message : "Couldn't reach the public resolver.");
@@ -791,7 +791,7 @@ function DnsManagerInner({
           <CardDescription>
             Temporary <code className="font-mono">_acme-challenge.*</code> TXT records for
             Certbot/ACME DNS-01 validation. Each auto-expires and is removed automatically.{" "}
-            <Link href={`/${namespace}/help`} className="underline underline-offset-2 hover:text-foreground">
+            <Link href={`/${namespace}/help#records`} className="underline underline-offset-2 hover:text-foreground">
               What&apos;s this?
             </Link>
           </CardDescription>
@@ -808,6 +808,7 @@ function DnsManagerInner({
                   <TableHead>Hostname</TableHead>
                   <TableHead>TXT value</TableHead>
                   <TableHead>Expires</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -820,6 +821,11 @@ function DnsManagerInner({
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {r.expiresAt ? formatRelativeTime(r.expiresAt) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {/* Certbot waits on exactly this - "is my challenge
+                          visible yet?" - so give ACME rows the same check. */}
+                      <PropagationStatus state={checks[r.id]} onCheck={() => checkOne(r)} />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -1378,7 +1384,7 @@ function AcmeDialogContent({
         <DialogDescription>
           Creates a temporary TXT record under <code className="font-mono">_acme-challenge.*</code>{" "}
           for Certbot/ACME DNS-01 validation. It expires and is removed automatically.{" "}
-          <Link href={`/${namespace}/help`} className="underline underline-offset-2 hover:text-foreground">
+          <Link href={`/${namespace}/help#records`} className="underline underline-offset-2 hover:text-foreground">
             What&apos;s this?
           </Link>
         </DialogDescription>
