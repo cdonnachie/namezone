@@ -390,6 +390,55 @@ function GoalCards({
   );
 }
 
+/**
+ * In-place "What's this?" explainer for SSL challenges, so people mid-flow
+ * (Certbot waiting in a terminal) don't have to navigate away to the help
+ * page to understand what they're doing.
+ */
+function SslExplainer({ namespace }: { namespace: string }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button type="button" className="underline underline-offset-2 hover:text-foreground">
+          What&apos;s this?
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Getting an SSL certificate (HTTPS)</DialogTitle>
+          <DialogDescription>
+            What the &quot;Add SSL Challenge&quot; button and TXT records are for.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            To get a free SSL certificate (so your site shows the padlock/https), certificate
+            authorities like Let&apos;s Encrypt need proof that you actually control the domain.
+            Tools like Certbot do this with a &quot;DNS-01 challenge&quot;: they ask you to publish
+            a specific, random text value in a TXT record under{" "}
+            <code className="font-mono">_acme-challenge</code>, then check that it&apos;s there.
+          </p>
+          <p>
+            The &quot;Add SSL Challenge&quot; button creates that TXT record for you &mdash; paste
+            in the value your ACME client (Certbot, etc.) gives you, save, and let the client
+            continue. These records are temporary and expire automatically; you don&apos;t need to
+            remember to clean them up.
+          </p>
+          <p>
+            <Link
+              href={`/${namespace}/help#records`}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Read the full guide
+            </Link>{" "}
+            for step-by-step examples.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type DeleteTarget =
   | { kind: "basic"; record: DnsRecordDto }
   | { kind: "acme"; record: DnsRecordDto };
@@ -791,9 +840,7 @@ function DnsManagerInner({
           <CardDescription>
             Temporary <code className="font-mono">_acme-challenge.*</code> TXT records for
             Certbot/ACME DNS-01 validation. Each auto-expires and is removed automatically.{" "}
-            <Link href={`/${namespace}/help#records`} className="underline underline-offset-2 hover:text-foreground">
-              What&apos;s this?
-            </Link>
+            <SslExplainer namespace={namespace} />
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1384,9 +1431,7 @@ function AcmeDialogContent({
         <DialogDescription>
           Creates a temporary TXT record under <code className="font-mono">_acme-challenge.*</code>{" "}
           for Certbot/ACME DNS-01 validation. It expires and is removed automatically.{" "}
-          <Link href={`/${namespace}/help#records`} className="underline underline-offset-2 hover:text-foreground">
-            What&apos;s this?
-          </Link>
+          <SslExplainer namespace={namespace} />
         </DialogDescription>
       </DialogHeader>
 
