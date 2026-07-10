@@ -1,13 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowRight, Globe } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getOwnedNameSummaries } from "@/lib/ownership/names-for-owner";
 import { getSession } from "@/lib/auth/session";
 import { getNamespace } from "@/lib/namespaces";
-import { formatRelativeTime } from "@/lib/utils";
+import { NamesBrowser } from "./names-browser";
 
 export default async function DashboardPage({
   params,
@@ -49,39 +45,16 @@ export default async function DashboardPage({
           </CardHeader>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {names.map((n) => (
-            <Card key={n.name} className="flex flex-col">
-              <CardHeader className="flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="flex min-w-0 items-center gap-2 text-lg">
-                    <Globe className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="break-all">{n.name}</span>
-                  </CardTitle>
-                  <Badge variant="secondary" className="shrink-0">
-                    {n.recordCount} record{n.recordCount === 1 ? "" : "s"}
-                  </Badge>
-                </div>
-                <CardDescription className="break-all font-mono">{n.zone}</CardDescription>
-                {n.transferJustDetected && (
-                  <Badge className="mt-2 w-fit bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400">
-                    Ownership recently transferred to you - old records were disabled
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="flex items-center justify-between pt-0">
-                <span className="text-xs text-muted-foreground">
-                  Updated {formatRelativeTime(n.lastUpdated)}
-                </span>
-                <Button asChild size="sm">
-                  <Link href={`/${ns.key}/dashboard/${encodeURIComponent(n.name)}`}>
-                    Manage <ArrowRight className="size-3.5" />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <NamesBrowser
+          namespace={ns.key}
+          names={names.map((n) => ({
+            name: n.name,
+            zone: n.zone,
+            recordCount: n.recordCount,
+            lastUpdated: n.lastUpdated.toISOString(),
+            transferJustDetected: n.transferJustDetected,
+          }))}
+        />
       )}
     </div>
   );
