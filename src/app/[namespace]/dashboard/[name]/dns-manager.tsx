@@ -70,6 +70,7 @@ import {
   deleteAcmeChallenge,
   deleteRecord,
   fetchAuditLogs,
+  verifyAllRecordsPropagation,
   verifyRecordPropagation,
   type AuditLogDto,
   type EditableRecordType,
@@ -149,65 +150,41 @@ function CopyInline({ value }: { value: string }) {
   );
 }
 
+/** Result of a public-visibility check for one record; "checking" while in flight. */
+type CheckState = "checking" | { visible: boolean; matched: boolean; answers: string[] };
+
 /**
- * Status cell for a record row: the static "Synced" badge (written to our
- * PowerDNS) plus an on-demand public-visibility check that asks a public
- * resolver whether the wider internet can see this record yet - the question
- * novices actually mean when they ask "is it working?".
+ * Status cell for a record row: the "Synced" badge (written to our PowerDNS)
+ * until a public-visibility check has run, then the check's outcome - the
+ * question novices actually mean when they ask "is it working?". Hovering a
+ * result badge shows exactly what the public resolver answered. Check state
+ * lives in the parent so "Check all" can drive every row at once.
  */
-function PropagationStatus({
-  namespace,
-  name,
-  record,
-}: {
-  namespace: string;
-  name: string;
-  record: DnsRecordDto;
-}) {
-  const [state, setState] = useState<
-    | { kind: "idle" }
-    | { kind: "checking" }
-    | { kind: "done"; visible: boolean; matched: boolean; answers: string[] }
-  >({ kind: "idle" });
-
-  async function check() {
-    setState({ kind: "checking" });
-    try {
-      const result = await verifyRecordPropagation(namespace, name, {
-        hostname: record.relativeHost,
-        type: record.type,
-        value: record.value,
-      });
-      setState({ kind: "done", ...result });
-    } catch (err) {
-      setState({ kind: "idle" });
-      toast.error(err instanceof ApiError ? err.message : "Couldn't reach the public resolver.");
-    }
-  }
-
+function PropagationStatus({ state, onCheck }: { state: CheckState | undefined; onCheck: () => void }) {
+  const done = state !== undefined && state !== "checking" ? state : null;
   return (
     <span className="inline-flex items-center gap-1.5">
-      {state.kind === "done" ? (
-        state.matched ? (
+      {done ? (
+        done.matched ? (
           <Badge
             className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15"
-            title="A public resolver returned this exact value."
+            title={`A public resolver sees this exact value. It answered: ${done.answers.join(", ")}`}
           >
-            Publicly visible
+            Public
           </Badge>
-        ) : state.visible ? (
+        ) : done.visible ? (
           <Badge
             className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
-            title={`The resolver currently returns: ${state.answers.join(", ")} - old values can stay cached for up to the TTL.`}
+            title={`The public resolver answered: ${done.answers.join(", ")} - old values can stay cached for up to the TTL (~5 min).`}
           >
-            Different value showing
+            Mismatch
           </Badge>
         ) : (
           <Badge
             className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
-            title="Not visible on public resolvers yet - new records typically appear within a few minutes."
+            title="The public resolver returned no answer for this record yet - new records typically appear within a few minutes."
           >
-            Not visible yet
+            Propagating
           </Badge>
         )
       ) : (
@@ -218,12 +195,12 @@ function PropagationStatus({
       <button
         type="button"
         className="inline-flex items-center text-muted-foreground hover:text-foreground disabled:opacity-50"
-        onClick={check}
-        disabled={state.kind === "checking"}
+        onClick={onCheck}
+        disabled={state === "checking"}
         title="Check whether the wider internet can see this record yet"
         aria-label="Check public visibility"
       >
-        {state.kind === "checking" ? (
+        {state === "checking" ? (
           <Loader2 className="size-3.5 animate-spin" />
         ) : (
           <Radar className="size-3.5" />
@@ -395,6 +372,9 @@ function DnsManagerInner({
   // Pre-fills the Add Record dialog when opened from a "get started" goal
   // button (e.g. "Point to my own server" -> host @, type A).
   const [preset, setPreset] = useState<{ hostname: string; type: EditableRecordType } | null>(null);
+  // Public-visibility check results, keyed by record id (see PropagationStatus).
+  const [checks, setChecks] = useState<Record<string, CheckState>>({});
+  const [checkingAll, setCheckingAll] = useState(false);
 
   const basicRecords = records.filter((r) => !r.isAcmeChallenge);
   const acmeRecords = records.filter((r) => r.isAcmeChallenge);
@@ -418,6 +398,68 @@ function DnsManagerInner({
 
   function removeLocal(record: DnsRecordDto) {
     setRecords((prev) => prev.filter((r) => r.id !== record.id));
+  }
+
+  async function checkOne(record: DnsRecordDto) {
+    setChecks((prev) => ({ ...prev, [record.id]: "checking" }));
+    try {
+      const r = await verifyRecordPropagation(namespace, name, {
+        hostname: record.relativeHost,
+        type: record.type,
+        value: record.value,
+      });
+      setChecks((prev) => ({
+        ...prev,
+        [record.id]: { visible: r.visible, matched: r.matched, answers: r.answers },
+      }));
+    } catch (err) {
+      setChecks((prev) => {
+        const next = { ...prev };
+        delete next[record.id];
+        return next;
+      });
+      toast.error(err instanceof ApiError ? err.message : "Couldn't reach the public resolver.");
+    }
+  }
+
+  async function checkAll() {
+    setCheckingAll(true);
+    setChecks((prev) => {
+      const next = { ...prev };
+      for (const r of basicRecords) next[r.id] = "checking";
+      return next;
+    });
+    try {
+      const { results } = await verifyAllRecordsPropagation(namespace, name);
+      setChecks((prev) => {
+        const next = { ...prev };
+        // Clear spinners for anything the server didn't report on.
+        for (const r of basicRecords) if (next[r.id] === "checking") delete next[r.id];
+        for (const r of results) {
+          if (!r.failed) next[r.id] = { visible: r.visible, matched: r.matched, answers: r.answers };
+        }
+        return next;
+      });
+      const checked = results.filter((r) => !r.failed);
+      const good = checked.filter((r) => r.matched).length;
+      if (checked.length > 0 && good === checked.length) {
+        toast.success(`All ${checked.length} records are publicly visible.`);
+      } else {
+        toast.info(`${good} of ${checked.length} records publicly visible so far.`, {
+          description:
+            "Recent changes can take up to ~5 minutes to propagate - hover a status badge to see what the resolver answered.",
+        });
+      }
+    } catch (err) {
+      setChecks((prev) => {
+        const next = { ...prev };
+        for (const r of basicRecords) if (next[r.id] === "checking") delete next[r.id];
+        return next;
+      });
+      toast.error(err instanceof ApiError ? err.message : "Couldn't reach the public resolver.");
+    } finally {
+      setCheckingAll(false);
+    }
   }
 
 
@@ -512,13 +554,28 @@ function DnsManagerInner({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">DNS records</CardTitle>
-          <CardDescription>
-            Hostname examples: {EXAMPLES.map((e) => e.host).join(", ")} &mdash; relative to{" "}
-            <span className="font-mono">{zone}</span>. A hostname holds either a single CNAME or a
-            mix of the other types, never a CNAME alongside others.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="text-base">DNS records</CardTitle>
+            <CardDescription className="mt-1.5">
+              Hostname examples: {EXAMPLES.map((e) => e.host).join(", ")} &mdash; relative to{" "}
+              <span className="font-mono">{zone}</span>. A hostname holds either a single CNAME or a
+              mix of the other types, never a CNAME alongside others.
+            </CardDescription>
+          </div>
+          {basicRecords.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="sm:shrink-0"
+              onClick={checkAll}
+              disabled={checkingAll}
+              title="Ask a public resolver whether every record is visible to the wider internet"
+            >
+              {checkingAll ? <Loader2 className="size-4 animate-spin" /> : <Radar className="size-4" />}
+              Check all
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {basicRecords.length === 0 ? (
@@ -606,7 +663,7 @@ function DnsManagerInner({
                     </TableCell>
                     <TableCell className="text-muted-foreground">{r.ttl}s</TableCell>
                     <TableCell>
-                      <PropagationStatus namespace={namespace} name={name} record={r} />
+                      <PropagationStatus state={checks[r.id]} onCheck={() => checkOne(r)} />
                     </TableCell>
                     <TableCell className="text-right">
                       {/* Only CNAME is single-value/editable. A/AAAA, MX and

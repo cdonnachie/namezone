@@ -189,3 +189,21 @@ export function verifyRecordPropagation(
     body: JSON.stringify(data),
   });
 }
+
+export interface VerifyAllResultEntry {
+  id: string;
+  fqdn: string;
+  type: string;
+  visible: boolean;
+  matched: boolean;
+  answers: string[];
+  /** The public resolver couldn't be reached for this record's lookup. */
+  failed?: boolean;
+}
+/** Checks every active record for the name in one request (grouped per rrset). */
+export function verifyAllRecordsPropagation(namespace: string, name: string) {
+  return request<{ results: VerifyAllResultEntry[] }>(
+    `/api/${namespace}/dns/${encodeURIComponent(name)}/verify`,
+    { method: "POST", body: JSON.stringify({ all: true }) },
+  );
+}
