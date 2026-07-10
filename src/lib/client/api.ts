@@ -164,6 +164,28 @@ export interface AuditLogDto {
   newValue: string | null;
   createdAt: string;
 }
-export function fetchAuditLogs(namespace: string) {
-  return request<{ logs: AuditLogDto[] }>(`/api/${namespace}/audit`);
+export function fetchAuditLogs(namespace: string, name?: string) {
+  const qs = name ? `?name=${encodeURIComponent(name)}` : "";
+  return request<{ logs: AuditLogDto[] }>(`/api/${namespace}/audit${qs}`);
+}
+
+export interface VerifyRecordResult {
+  fqdn: string;
+  type: string;
+  resolver: string;
+  /** The public resolver returned at least one answer of this type. */
+  visible: boolean;
+  /** One of those answers matches the value we hold. */
+  matched: boolean;
+  answers: string[];
+}
+export function verifyRecordPropagation(
+  namespace: string,
+  name: string,
+  data: { hostname: string; type: string; value: string },
+) {
+  return request<VerifyRecordResult>(`/api/${namespace}/dns/${encodeURIComponent(name)}/verify`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }

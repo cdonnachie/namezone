@@ -1,9 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, Copy, Globe, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  Copy,
+  Globe,
+  History,
+  Loader2,
+  Plus,
+  Radar,
+  Server,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -57,6 +69,9 @@ import {
   createOrUpdateRecord,
   deleteAcmeChallenge,
   deleteRecord,
+  fetchAuditLogs,
+  verifyRecordPropagation,
+  type AuditLogDto,
   type EditableRecordType,
   type DnsRecordDto,
 } from "@/lib/client/api";
@@ -100,6 +115,22 @@ const GITHUB_PAGES_RECORDS: { type: "A" | "AAAA"; value: string }[] = [
   { type: "AAAA", value: "2606:50c0:8003::153" },
 ];
 
+// Plain-language, novice-facing explanation for each record type, shown under
+// the type picker so people choose by goal rather than by acronym.
+const TYPE_EXPLANATIONS: Record<EditableRecordType, string> = {
+  A: "Points this hostname at a server's IPv4 address - use this for your own server or VPS.",
+  AAAA: "Same as A, but for a server's IPv6 address.",
+  CNAME:
+    "Makes this hostname an alias of another domain - use for GitHub Pages, Vercel, Netlify and similar hosts.",
+  MX: "Tells the internet where to deliver email for this domain.",
+  TXT: "Text records for email setup and ownership verification (SPF, DKIM, DMARC, provider tokens).",
+};
+
+// Records use a fixed 300s TTL; set expectations after every write so people
+// don't read "Synced" as "the whole internet sees it already".
+const PROPAGATION_NOTE =
+  "Live on our nameservers now. The wider internet can take up to ~5 minutes (the record's TTL) to notice.";
+
 function CopyInline({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -115,6 +146,194 @@ function CopyInline({ value }: { value: string }) {
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </button>
+  );
+}
+
+/**
+ * Status cell for a record row: the static "Synced" badge (written to our
+ * PowerDNS) plus an on-demand public-visibility check that asks a public
+ * resolver whether the wider internet can see this record yet - the question
+ * novices actually mean when they ask "is it working?".
+ */
+function PropagationStatus({
+  namespace,
+  name,
+  record,
+}: {
+  namespace: string;
+  name: string;
+  record: DnsRecordDto;
+}) {
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "done"; visible: boolean; matched: boolean; answers: string[] }
+  >({ kind: "idle" });
+
+  async function check() {
+    setState({ kind: "checking" });
+    try {
+      const result = await verifyRecordPropagation(namespace, name, {
+        hostname: record.relativeHost,
+        type: record.type,
+        value: record.value,
+      });
+      setState({ kind: "done", ...result });
+    } catch (err) {
+      setState({ kind: "idle" });
+      toast.error(err instanceof ApiError ? err.message : "Couldn't reach the public resolver.");
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {state.kind === "done" ? (
+        state.matched ? (
+          <Badge
+            className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15"
+            title="A public resolver returned this exact value."
+          >
+            Publicly visible
+          </Badge>
+        ) : state.visible ? (
+          <Badge
+            className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
+            title={`The resolver currently returns: ${state.answers.join(", ")} - old values can stay cached for up to the TTL.`}
+          >
+            Different value showing
+          </Badge>
+        ) : (
+          <Badge
+            className="bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
+            title="Not visible on public resolvers yet - new records typically appear within a few minutes."
+          >
+            Not visible yet
+          </Badge>
+        )
+      ) : (
+        <Badge className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15">
+          Synced
+        </Badge>
+      )}
+      <button
+        type="button"
+        className="inline-flex items-center text-muted-foreground hover:text-foreground disabled:opacity-50"
+        onClick={check}
+        disabled={state.kind === "checking"}
+        title="Check whether the wider internet can see this record yet"
+        aria-label="Check public visibility"
+      >
+        {state.kind === "checking" ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Radar className="size-3.5" />
+        )}
+      </button>
+    </span>
+  );
+}
+
+const AUDIT_ACTION_LABELS: Record<AuditLogDto["action"], { label: string; className: string }> = {
+  CREATE: {
+    label: "Added",
+    className: "bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15",
+  },
+  UPDATE: {
+    label: "Updated",
+    className: "bg-blue-500/15 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15",
+  },
+  DELETE: {
+    label: "Deleted",
+    className: "bg-red-500/15 text-red-600 dark:text-red-400 hover:bg-red-500/15",
+  },
+  DISABLE: {
+    label: "Disabled",
+    className: "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15",
+  },
+};
+
+/**
+ * "Recent changes" panel: the caller's own audit trail for this name, so
+ * people can self-debug ("oh, *I* deleted that record yesterday") without
+ * asking for support. Re-fetches whenever the records list changes identity,
+ * which every save/delete in this page does.
+ */
+function RecentChanges({
+  namespace,
+  name,
+  refreshToken,
+}: {
+  namespace: string;
+  name: string;
+  refreshToken: unknown;
+}) {
+  // null = first load in flight; on later refreshes the previous list stays
+  // visible until the new one lands.
+  const [logs, setLogs] = useState<AuditLogDto[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAuditLogs(namespace, name)
+      .then(({ logs }) => {
+        if (!cancelled) setLogs(logs);
+      })
+      .catch(() => {
+        if (!cancelled) setLogs((prev) => prev ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [namespace, name, refreshToken]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-1.5 text-base">
+          <History className="size-4 text-muted-foreground" /> Recent changes
+        </CardTitle>
+        <CardDescription>
+          Your last changes to this name - useful when something stopped working and you want to
+          see what changed.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {logs === null ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            <Loader2 className="mr-1.5 inline size-3.5 animate-spin" /> Loading&hellip;
+          </p>
+        ) : logs.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">No changes recorded yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {logs.slice(0, 10).map((log) => {
+              const action = AUDIT_ACTION_LABELS[log.action];
+              return (
+                <li key={log.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                  <Badge className={`${action.className} hover:${action.className.split(" ")[0]} shrink-0`}>
+                    {action.label}
+                  </Badge>
+                  <Badge variant="outline" className="shrink-0">
+                    {log.type}
+                  </Badge>
+                  <span className="break-all font-mono text-xs">{log.fqdn.replace(/\.$/, "")}</span>
+                  {(log.newValue ?? log.oldValue) && (
+                    <span
+                      className="max-w-48 truncate font-mono text-xs text-muted-foreground"
+                      title={log.newValue ?? log.oldValue ?? undefined}
+                    >
+                      {log.newValue ?? log.oldValue}
+                    </span>
+                  )}
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                    {formatRelativeTime(log.createdAt)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -173,6 +392,9 @@ function DnsManagerInner({
   const [ghOpen, setGhOpen] = useState(false);
   const [editing, setEditing] = useState<DnsRecordDto | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
+  // Pre-fills the Add Record dialog when opened from a "get started" goal
+  // button (e.g. "Point to my own server" -> host @, type A).
+  const [preset, setPreset] = useState<{ hostname: string; type: EditableRecordType } | null>(null);
 
   const basicRecords = records.filter((r) => !r.isAcmeChallenge);
   const acmeRecords = records.filter((r) => r.isAcmeChallenge);
@@ -258,7 +480,10 @@ function DnsManagerInner({
               open={addOpen}
               onOpenChange={(open) => {
                 setAddOpen(open);
-                if (!open) setEditing(null);
+                if (!open) {
+                  setEditing(null);
+                  setPreset(null);
+                }
               }}
             >
               <DialogTrigger asChild>
@@ -267,16 +492,18 @@ function DnsManagerInner({
                 </Button>
               </DialogTrigger>
               <RecordDialogContent
-                key={editing?.id ?? "new"}
+                key={editing?.id ?? (preset ? `preset-${preset.type}-${preset.hostname}` : "new")}
                 namespace={namespace}
                 name={name}
                 zone={zone}
                 emailEnabled={emailEnabled}
                 existing={editing}
+                initial={preset}
                 onSaved={(record) => {
                   upsertLocal(record);
                   setAddOpen(false);
                   setEditing(null);
+                  setPreset(null);
                 }}
               />
             </Dialog>
@@ -295,9 +522,49 @@ function DnsManagerInner({
         </CardHeader>
         <CardContent>
           {basicRecords.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No DNS records yet. Add your first A, AAAA, or CNAME record above.
-            </p>
+            <div className="py-8">
+              <p className="mb-1 text-center text-sm font-medium">What do you want to do with {displayZone}?</p>
+              <p className="mb-6 text-center text-sm text-muted-foreground">
+                Pick a goal and we&apos;ll set up the right records - no DNS knowledge needed.
+              </p>
+              <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setGhOpen(true)}
+                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+                >
+                  <Globe className="size-5 text-primary" />
+                  <span className="text-sm font-medium">Host a website</span>
+                  <span className="text-xs text-muted-foreground">
+                    Free hosting via GitHub Pages - we add the records for you.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreset({ hostname: "@", type: "A" });
+                    setAddOpen(true);
+                  }}
+                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+                >
+                  <Server className="size-5 text-primary" />
+                  <span className="text-sm font-medium">Point to my own server</span>
+                  <span className="text-xs text-muted-foreground">
+                    Have a VPS or home server? Point {displayZone} at its IP address.
+                  </span>
+                </button>
+                <Link
+                  href={`/${namespace}/help`}
+                  className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+                >
+                  <BookOpen className="size-5 text-primary" />
+                  <span className="text-sm font-medium">Learn what&apos;s possible</span>
+                  <span className="text-xs text-muted-foreground">
+                    Websites, subdomains, SSL certificates and more - see the guide.
+                  </span>
+                </Link>
+              </div>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -329,9 +596,7 @@ function DnsManagerInner({
                     <TableCell className="font-mono">{r.value}</TableCell>
                     <TableCell className="text-muted-foreground">{r.ttl}s</TableCell>
                     <TableCell>
-                      <Badge className="bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/15">
-                        Synced
-                      </Badge>
+                      <PropagationStatus namespace={namespace} name={name} record={r} />
                     </TableCell>
                     <TableCell className="text-right">
                       {/* Only CNAME is single-value/editable. A/AAAA, MX and
@@ -426,6 +691,8 @@ function DnsManagerInner({
         </CardContent>
       </Card>
 
+      <RecentChanges namespace={namespace} name={name} refreshToken={records} />
+
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -462,7 +729,7 @@ function DnsManagerInner({
                     });
                   });
                   removeLocal(deleting.record);
-                  toast.success("DNS record deleted and synced");
+                  toast.success("DNS record deleted", { description: PROPAGATION_NOTE });
                 } catch (err) {
                   toast.error(err instanceof ApiError ? err.message : "Failed to delete record.");
                 } finally {
@@ -684,6 +951,7 @@ function RecordDialogContent({
   zone,
   emailEnabled,
   existing,
+  initial,
   onSaved,
 }: {
   namespace: string;
@@ -691,11 +959,15 @@ function RecordDialogContent({
   zone: string;
   emailEnabled: boolean;
   existing: DnsRecordDto | null;
+  /** Optional pre-fill when opened from a "get started" goal button. */
+  initial?: { hostname: string; type: EditableRecordType } | null;
   onSaved: (record: DnsRecordDto) => void;
 }) {
   const runWithStepUp = useStepUp();
-  const [hostname, setHostname] = useState(existing?.relativeHost ?? "");
-  const [type, setType] = useState<EditableRecordType>((existing?.type as EditableRecordType) ?? "A");
+  const [hostname, setHostname] = useState(existing?.relativeHost ?? initial?.hostname ?? "");
+  const [type, setType] = useState<EditableRecordType>(
+    (existing?.type as EditableRecordType) ?? initial?.type ?? "A",
+  );
   const [value, setValue] = useState(existing?.value ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -760,7 +1032,7 @@ function RecordDialogContent({
           value: outValue,
         }),
       );
-      toast.success("DNS record saved and synced to PowerDNS");
+      toast.success("DNS record saved", { description: PROPAGATION_NOTE });
       onSaved(record);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to save record.");
@@ -831,6 +1103,7 @@ function RecordDialogContent({
               {emailEnabled && <SelectItem value="TXT">TXT (SPF / DKIM / DMARC)</SelectItem>}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">{TYPE_EXPLANATIONS[type]}</p>
         </div>
 
         <div className="space-y-2">

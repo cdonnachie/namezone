@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { requireClaimedNameOwnership } from "@/lib/ownership/sync";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
@@ -32,6 +32,10 @@ export default async function DnsManagementPage({
   const auth = await requireClaimedNameOwnership(ns, decodeURIComponent(rawName), session.address);
 
   if (!auth.ok) {
+    // 403 = the name exists but this wallet isn't its current owner. That's
+    // usually a name that changed hands (sold, transferred, or connected with
+    // the wrong wallet), so explain the situation instead of a bare error.
+    const notOwner = auth.status === 403;
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">
         <Card>
@@ -39,6 +43,30 @@ export default async function DnsManagementPage({
             <CardTitle>Cannot manage {auth.name}</CardTitle>
             <CardDescription>{auth.error}</CardDescription>
           </CardHeader>
+          {notOwner && (
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Ownership is decided by the blockchain, so this page follows whichever wallet
+                currently holds the name:
+              </p>
+              <ul className="list-disc space-y-1.5 pl-5">
+                <li>
+                  <span className="font-medium text-foreground">Just bought this name?</span>{" "}
+                  Disconnect and sign in again with the wallet address that{" "}
+                  <em>received</em> it - that wallet is the owner now.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Sold or transferred it away?</span>{" "}
+                  This is expected. Its DNS records were disabled automatically when ownership
+                  changed, and the new owner starts from a clean slate.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Have several wallets?</span> Check
+                  you&apos;re connected with the one that holds this name.
+                </li>
+              </ul>
+            </CardContent>
+          )}
         </Card>
         <Button asChild variant="outline" className="mt-4">
           <Link href={`/${ns.key}/dashboard`}>

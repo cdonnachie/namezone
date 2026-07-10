@@ -42,7 +42,9 @@ export default async function DashboardPage({
             <CardTitle>No {ns.chainName} names found</CardTitle>
             <CardDescription>
               We couldn&apos;t find any {ns.chainName} names owned by this address. If you just
-              registered one, ownership may take a moment to sync.
+              registered one, ownership may take a moment to sync. Just bought a name from someone?
+              Make sure you&apos;re connected with the wallet address that received it &mdash; the
+              blockchain decides the owner, and this site follows it.
             </CardDescription>
           </CardHeader>
         </Card>
