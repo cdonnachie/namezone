@@ -99,6 +99,21 @@ describe("validateSourceName", () => {
     expect(validateSourceName(".avn", avian).ok).toBe(false);
   });
 
+  it.each(["app.demo.avn", "www.bob.avn", "a.b.c.avn"])(
+    "rejects sub-shaped on-chain name %s - only <single-label>.<tld> is ever manageable",
+    (name) => {
+      // Registering e.g. the APP.DEMO.AVN asset on-chain must never grant
+      // control inside demo.avn's zone: app.demo.avn.zone belongs to
+      // demo.avn's owner (as hostname "app"), not to whoever holds the
+      // sub-shaped name.
+      expect(validateSourceName(name, avian).ok).toBe(false);
+    },
+  );
+
+  it("rejects the sub-shaped wave name app.demo.rxd for Radiant too", () => {
+    expect(validateSourceName("app.demo.rxd", { tld: "rxd" }).ok).toBe(false);
+  });
+
   it.each(["www.avn", "ns1.avn", "ns2.avn"])(
     "rejects the reserved name %s even if someone registers it on-chain",
     (name) => {

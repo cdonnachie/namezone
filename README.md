@@ -148,12 +148,19 @@ badge shape.
 
 ## Name → DNS zone mapping
 
+Only **single-label** names (`<label>.<tld>`) can be claimed and managed. Everything deeper is
+a *hostname* the name's owner manages under their zone:
+
 ```
-bob.avn       -> bob.avn.zone
-www.bob.avn   -> www.bob.avn.zone
-test.bob.avn  -> test.bob.avn.zone
-api.test.avn  -> api.test.avn.zone   (multi-level names use the same rule)
+bob.avn (claimable)  -> bob.avn.zone
+  hostname "www"       -> www.bob.avn.zone
+  hostname "api.test"  -> api.test.bob.avn.zone
 ```
+
+Sub-shaped on-chain names are rejected outright (`validateSourceName`): whoever registers the
+asset `APP.BOB.AVN` or wave name `app.bob` on-chain can never manage `app.bob.avn.zone` through
+the app - that hostname belongs exclusively to `bob.avn`'s owner. Without this rule, a stranger
+could register a sub-shaped name and plant records inside an existing owner's zone.
 
 The owner of `bob.avn` may manage `bob.avn.zone` and any `*.bob.avn.zone` child, and may
 **never** manage `avn.zone` itself, the reserved operator hostnames (`ns1`, `ns2`, `www` -
