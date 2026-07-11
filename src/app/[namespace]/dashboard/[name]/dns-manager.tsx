@@ -10,6 +10,7 @@ import {
   Globe,
   History,
   Loader2,
+  Lock,
   Plus,
   Radar,
   Server,
@@ -346,14 +347,16 @@ function GoalCards({
   zoneLabel,
   onHostWebsite,
   onPointServer,
+  onServerSetup,
 }: {
   namespace: string;
   zoneLabel: string;
   onHostWebsite: () => void;
   onPointServer: () => void;
+  onServerSetup: () => void;
 }) {
   return (
-    <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-3">
+    <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
       <button
         type="button"
         onClick={onHostWebsite}
@@ -374,6 +377,17 @@ function GoalCards({
         <span className="text-sm font-medium">Point to my own server</span>
         <span className="text-xs text-muted-foreground">
           Have a VPS or home server? Point {zoneLabel} at its IP address.
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onServerSetup}
+        className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+      >
+        <Lock className="size-5 text-primary" />
+        <span className="text-sm font-medium">Add HTTPS to my server</span>
+        <span className="text-xs text-muted-foreground">
+          Copy-paste Caddy or nginx + certbot configs with your hostname filled in.
         </span>
       </button>
       <Link
@@ -439,6 +453,119 @@ function SslExplainer({ namespace }: { namespace: string }) {
   );
 }
 
+/**
+ * Copy-paste server configs (Caddy / nginx + certbot) with the user's real
+ * hostname pre-filled. The help page can only show an example name; here we
+ * know exactly which hostnames point at the user's server.
+ */
+function ServerSetupDialogContent({
+  namespace,
+  displayZone,
+  records,
+}: {
+  namespace: string;
+  displayZone: string;
+  records: DnsRecordDto[];
+}) {
+  // Hostnames with an A/AAAA record are the ones a web server can answer for.
+  const hosts = [
+    ...new Set(
+      records
+        .filter((r) => r.type === "A" || r.type === "AAAA")
+        .map((r) => r.fqdn.replace(/\.$/, "")),
+    ),
+  ];
+  const [host, setHost] = useState(
+    hosts.includes(displayZone) ? displayZone : (hosts[0] ?? displayZone),
+  );
+
+  const caddySnippet = `${host} {\n    reverse_proxy localhost:3000\n}`;
+  const nginxSnippet = `server {\n    listen 80;\n    listen [::]:80;\n    server_name ${host};\n    root /var/www/site;   # or proxy_pass to your app\n}`;
+  const certbotSnippet = `sudo certbot --nginx -d ${host}`;
+
+  return (
+    <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>Add HTTPS to your server</DialogTitle>
+        <DialogDescription>
+          Copy-paste configs with your hostname filled in. Both setups need ports 80 and 443
+          reachable from the internet.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-5 text-sm">
+        {hosts.length > 1 && (
+          <div className="space-y-2">
+            <Label>Hostname</Label>
+            <Select value={host} onValueChange={setHost}>
+              <SelectTrigger className="font-mono">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {hosts.map((h) => (
+                  <SelectItem key={h} value={h} className="font-mono">
+                    {h}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="font-medium">Caddy (easiest - HTTPS is automatic)</p>
+            <CopyInline value={caddySnippet} />
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            Caddy obtains and renews certificates by itself. This Caddyfile is the entire
+            configuration - swap the port for wherever your app listens, or use{" "}
+            <code className="font-mono">root * /var/www/site</code> +{" "}
+            <code className="font-mono">file_server</code> for static files.
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            {caddySnippet}
+          </pre>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="font-medium">nginx + certbot</p>
+            <CopyInline value={nginxSnippet} />
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            Add a server block, then let certbot fetch the certificate and wire up automatic
+            renewal (
+            <a
+              href="https://certbot.eff.org/instructions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              install certbot
+            </a>
+            ):
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            {nginxSnippet}
+          </pre>
+          <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+            {certbotSnippet}
+          </pre>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Server behind a firewall or CGNAT with no way to open port 80? Use the &quot;Add SSL
+          Challenge&quot; button instead (certificates won&apos;t auto-renew that way).{" "}
+          <Link
+            href={`/${namespace}/help#hosting`}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Read the full guide
+          </Link>
+          .
+        </p>
+      </div>
+    </DialogContent>
+  );
+}
+
 type DeleteTarget =
   | { kind: "basic"; record: DnsRecordDto }
   | { kind: "acme"; record: DnsRecordDto };
@@ -493,6 +620,7 @@ function DnsManagerInner({
   const [acmeOpen, setAcmeOpen] = useState(false);
   const [ghOpen, setGhOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [serverSetupOpen, setServerSetupOpen] = useState(false);
   const [editing, setEditing] = useState<DnsRecordDto | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   // Pre-fills the Add Record dialog when opened from a "get started" goal
@@ -645,11 +773,23 @@ function DnsManagerInner({
                     setQuickOpen(false);
                     openPointServer();
                   }}
+                  onServerSetup={() => {
+                    setQuickOpen(false);
+                    setServerSetupOpen(true);
+                  }}
                 />
               </DialogContent>
             </Dialog>
             {/* Controlled, trigger-less: opened from the Quick setup goals and
                 the empty-state cards. */}
+            <Dialog open={serverSetupOpen} onOpenChange={setServerSetupOpen}>
+              <ServerSetupDialogContent
+                key={serverSetupOpen ? "open" : "closed"}
+                namespace={namespace}
+                displayZone={displayZone}
+                records={basicRecords}
+              />
+            </Dialog>
             <Dialog open={ghOpen} onOpenChange={setGhOpen}>
               <GithubPagesDialogContent
                 key={ghOpen ? "open" : "closed"}
@@ -752,6 +892,7 @@ function DnsManagerInner({
                 zoneLabel={displayZone}
                 onHostWebsite={() => setGhOpen(true)}
                 onPointServer={openPointServer}
+                onServerSetup={() => setServerSetupOpen(true)}
               />
             </div>
           ) : (

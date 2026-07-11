@@ -108,6 +108,78 @@ export default async function HelpPage({
         </CardContent>
       </Card>
 
+      <Card id="hosting">
+        <CardHeader>
+          <CardTitle>Hosting a site on your own server</CardTitle>
+          <CardDescription>
+            You&apos;ve pointed {example ? example.zone : ns.dnsZone} at your server&apos;s IP -
+            here&apos;s how to serve it with HTTPS. Two good setups, easiest first. Both need
+            ports 80 and 443 reachable from the internet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div>
+            <p className="font-medium">Caddy (easiest - HTTPS is automatic)</p>
+            <p className="text-muted-foreground">
+              <a
+                href="https://caddyserver.com/docs/install"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                Caddy
+              </a>{" "}
+              obtains and renews certificates by itself - no certbot, no TXT records, nothing to
+              remember. This Caddyfile is the entire configuration:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+              {`${example ? example.zone : ns.dnsZone} {\n    reverse_proxy localhost:3000\n}`}
+            </pre>
+            <p className="mt-2 text-muted-foreground">
+              Serving static files instead of an app? Replace the{" "}
+              <code className="font-mono">reverse_proxy</code> line with{" "}
+              <code className="font-mono">root * /var/www/site</code> and{" "}
+              <code className="font-mono">file_server</code>.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">nginx + certbot</p>
+            <p className="text-muted-foreground">
+              Add a server block for your hostname, then let certbot fetch the certificate and
+              wire up automatic renewal:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+              {`server {\n    listen 80;\n    listen [::]:80;\n    server_name ${example ? example.zone : ns.dnsZone};\n    root /var/www/site;   # or proxy_pass to your app\n}`}
+            </pre>
+            <pre className="mt-2 overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+              {`sudo certbot --nginx -d ${example ? example.zone : ns.dnsZone}`}
+            </pre>
+            <p className="mt-2 text-muted-foreground">
+              To install certbot itself, follow the per-OS instructions at{" "}
+              <a
+                href="https://certbot.eff.org/instructions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                certbot.eff.org
+              </a>
+              .
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">Can&apos;t open port 80?</p>
+            <p className="text-muted-foreground">
+              If your server sits behind a firewall or CGNAT and can&apos;t be reached on port
+              80, use the &quot;Add SSL Challenge&quot; button and the DNS-01 flow described in
+              the next section instead - it proves ownership through DNS, so no inbound
+              connection is needed. The trade-off: certificates issued that way don&apos;t renew
+              automatically.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Getting an SSL certificate (HTTPS)</CardTitle>
@@ -128,6 +200,14 @@ export default async function HelpPage({
             the value your ACME client (Certbot, etc.) gives you, save, and let the client
             continue. These records are temporary and expire automatically; you don&apos;t need
             to remember to clean them up.
+          </p>
+          <p>
+            One caveat: certificates issued through this manual DNS-01 flow{" "}
+            <span className="font-medium text-foreground">don&apos;t renew automatically</span>{" "}
+            - you&apos;ll repeat the paste-a-TXT-record step roughly every 90 days when the
+            certificate expires. If your server is reachable on port 80, the setups in
+            &quot;Hosting a site on your own server&quot; above get you a certificate that
+            renews itself - only use this flow when they can&apos;t work.
           </p>
         </CardContent>
       </Card>

@@ -10,6 +10,7 @@ type TabId = (typeof TAB_IDS)[number];
 // element id, and this maps it to the tab that must be active for the card
 // to exist in the DOM (Radix unmounts inactive tab content).
 const CARD_TABS: Record<string, TabId> = {
+  hosting: "records",
   privacy: "records",
 };
 
