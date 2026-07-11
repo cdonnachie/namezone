@@ -131,6 +131,52 @@ export default async function HelpPage({
           </p>
         </CardContent>
       </Card>
+
+      <Card id="privacy">
+        <CardHeader>
+          <CardTitle>Your IP address is public</CardTitle>
+          <CardDescription>
+            DNS records are public information - anyone on the internet can look up the IP
+            behind {example ? example.zone : ns.dnsZone}. If you point an A record at your home
+            connection, you&apos;re publishing your home IP, which reveals your rough location
+            and ISP and gives attackers a direct target. And passive-DNS services archive every
+            answer they see: deleting the record later doesn&apos;t unpublish the IP it once
+            held, so pick a setup you&apos;re comfortable with <em>before</em> creating the
+            record. If that bothers you, you have options.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div>
+            <p className="font-medium">Use a small VPS instead</p>
+            <p className="text-muted-foreground">
+              Point your A record at a cheap VPS and host your site there (or have the VPS
+              reverse-proxy to your home machine). Visitors only ever see the VPS&apos;s IP -
+              your home IP never appears in DNS.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">Or use a tunnel with a CNAME</p>
+            <p className="text-muted-foreground">
+              Tunnel providers that support custom domains (ngrok&apos;s paid tier, Pangolin,
+              and similar) give you a hostname to use as a CNAME target. Your machine keeps an
+              outbound connection open to the provider, so you need no inbound ports, no port
+              forwarding, and no published IP - this also works behind CGNAT. Note that plain
+              Cloudflare Tunnel won&apos;t work here, because it requires adding{" "}
+              {ns.dnsZone} - a zone you don&apos;t own - to a Cloudflare account.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium">Delete CNAMEs you stop using (subdomain takeover)</p>
+            <p className="text-muted-foreground">
+              A CNAME keeps vouching for its target even after you cancel the service behind
+              it. On many platforms an attacker can re-register your abandoned target hostname
+              and then serve their own content - with a valid certificate - as your{" "}
+              {example ? example.zone : ns.dnsZone} name. When you stop using a tunnel or
+              hosting provider, delete the CNAME record at the same time.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </>
   );
 

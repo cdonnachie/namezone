@@ -6,6 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const TAB_IDS = ["basics", "records", "security"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
+// Deep links to individual cards inside a tab: the hash names the card's
+// element id, and this maps it to the tab that must be active for the card
+// to exist in the DOM (Radix unmounts inactive tab content).
+const CARD_TABS: Record<string, TabId> = {
+  privacy: "records",
+};
+
 /**
  * Tabbed shell for the help page. The cards themselves stay server-rendered
  * (passed in as children per tab); this wrapper only owns which tab is
@@ -24,8 +31,16 @@ export function HelpTabs({ basics, records, security }: Record<TabId, React.Reac
     // than the server did (hydration mismatch), so a post-mount set is the
     // correct pattern here despite the lint rule.
     const hash = window.location.hash.slice(1);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if ((TAB_IDS as readonly string[]).includes(hash)) setTab(hash as TabId);
+    if ((TAB_IDS as readonly string[]).includes(hash)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTab(hash as TabId);
+    } else if (hash in CARD_TABS) {
+      setTab(CARD_TABS[hash]);
+      // Scroll after the tab's content has mounted.
+      requestAnimationFrame(() => {
+        document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
   }, []);
 
   function handleChange(value: string) {

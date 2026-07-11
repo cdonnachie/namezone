@@ -1314,6 +1314,18 @@ function RecordDialogContent({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">{TYPE_EXPLANATIONS[type]}</p>
+          {(type === "A" || type === "AAAA") && (
+            <p className="text-xs text-muted-foreground">
+              This IP address becomes publicly visible in DNS.{" "}
+              <Link
+                href={`/${namespace}/help#privacy`}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                See the privacy guide
+              </Link>{" "}
+              if you don&apos;t want to expose a home connection.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
