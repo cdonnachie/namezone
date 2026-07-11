@@ -58,7 +58,6 @@ export async function syncClaimedNameOwnership(namespace: NamespaceConfig, name:
       verifiedAt: now,
       lastOwnershipCheckAt: now,
     },
-    include: { _count: { select: { records: { where: { status: "ACTIVE" } } } } },
   });
 
   return { record, transferJustDetected };

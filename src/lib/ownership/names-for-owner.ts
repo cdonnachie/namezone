@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/db";
 import { reconcileClaimedNameRecordsWithPowerDns } from "@/lib/dns/reconcile";
 import { sourceNameToBaseFqdn, validateSourceName } from "@/lib/dns/validation";
 import type { NamespaceConfig } from "@/lib/namespaces/types";
@@ -25,19 +26,35 @@ export async function getOwnedNameSummaries(
     (name) => validateSourceName(name, namespace).ok,
   );
 
+  // Sync ownership BEFORE reconciling: reconcile upserts DnsRecord rows whose
+  // (namespace, claimedName) FK requires the ClaimedName row to already exist,
+  // and this is what creates it (a wiped local DB against a live PowerDNS
+  // would otherwise 500 with a foreign-key violation). It also means
+  // transfer-triggered record cleanup happens before reconcile snapshots the
+  // live zone, not after.
+  const synced = await Promise.all(
+    names.map(async (name) => ({
+      name,
+      ...(await syncClaimedNameOwnership(namespace, name, address)),
+    })),
+  );
+
   await reconcileClaimedNameRecordsWithPowerDns(namespace, names);
 
-  return Promise.all(
-    names.map(async (name) => {
-      const { record, transferJustDetected } = await syncClaimedNameOwnership(namespace, name, address);
+  // Count records only after reconcile - it may have mirrored live PowerDNS
+  // records into rows that didn't exist locally yet (or removed stale ones).
+  const counts = await prisma.dnsRecord.groupBy({
+    by: ["claimedName"],
+    where: { namespace: namespace.key, claimedName: { in: names }, status: "ACTIVE" },
+    _count: { _all: true },
+  });
+  const countByName = new Map(counts.map((c) => [c.claimedName, c._count._all]));
 
-      return {
-        name,
-        zone: sourceNameToBaseFqdn(name, namespace),
-        recordCount: record._count.records,
-        lastUpdated: record.updatedAt,
-        transferJustDetected,
-      };
-    }),
-  );
+  return synced.map(({ name, record, transferJustDetected }) => ({
+    name,
+    zone: sourceNameToBaseFqdn(name, namespace),
+    recordCount: countByName.get(name) ?? 0,
+    lastUpdated: record.updatedAt,
+    transferJustDetected,
+  }));
 }
