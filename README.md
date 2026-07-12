@@ -267,6 +267,22 @@ submitting `?name=...` back to itself (no client JS required), rendering whateve
 non-ACME-challenge `DnsRecord` rows exist for that claimed name. Linked from the nav bar
 regardless of session state.
 
+## Core-team verified names
+
+Every subdomain is run by whoever owns the name on-chain, so an official-sounding name
+(`brand.avn`) isn't automatically the team's. `VERIFIED_TEAM_NAMES` (JSON map of full source
+name → team-held owner address — see `.env.example`) marks the genuinely official ones. A name
+counts as verified only while its **current** owner matches the configured address, checked
+against the `ClaimedName` cache (kept honest by per-visit ownership checks plus the background
+watcher) — selling the asset drops the badge automatically, within one watcher sweep at worst.
+
+Surfaces (`src/lib/verified-names.ts`): a "Core team" badge on the lookup page, a public
+registry at `/[namespace]/official` (linked from the landing page when non-empty), and
+`GET /api/[namespace]/verified` (JSON, cacheable) for explorers/wallets. Deliberately **no**
+embeddable badge widget — a badge rendered by the site being verified is just copyable pixels;
+the help page instead documents linking to the name's own lookup page ("verify this site"),
+where the badge is rendered by this service and can't be faked.
+
 ## Custom-domain routing
 
 Each namespace's own DNS zone apex (`avn.zone`, `rxd.zone` by default, or whatever

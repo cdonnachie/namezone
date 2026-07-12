@@ -5,9 +5,14 @@ import { NamespaceLogo } from "@/components/namespace-logo";
 import { MobileNav } from "@/components/mobile-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NavAuthActions } from "@/components/nav-auth-actions";
+import { configuredVerifiedNamesFor } from "@/lib/verified-names";
 
 export async function NavBar({ namespace }: { namespace: NamespaceConfig }) {
   const session = await getSession(namespace.key);
+  // Config-only check (no DB hit on every page): show the tab once any name
+  // is configured for this namespace; the page itself handles the edge where
+  // none currently pass verification.
+  const showOfficial = configuredVerifiedNamesFor(namespace).size > 0;
 
   return (
     <header className="border-b bg-sidebar/90 backdrop-blur supports-backdrop-filter:bg-sidebar/75 sticky top-0 z-40">
@@ -44,6 +49,14 @@ export async function NavBar({ namespace }: { namespace: NamespaceConfig }) {
             >
               Lookup
             </Link>
+            {showOfficial && (
+              <Link
+                href={`/${namespace.key}/official`}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Official
+              </Link>
+            )}
             <Link
               href={`/${namespace.key}/help`}
               className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -56,7 +69,11 @@ export async function NavBar({ namespace }: { namespace: NamespaceConfig }) {
             <NavAuthActions namespace={namespace.key} address={session?.address ?? null} />
           </div>
           <div className="md:hidden">
-            <MobileNav namespace={namespace.key} address={session?.address ?? null} />
+            <MobileNav
+              namespace={namespace.key}
+              address={session?.address ?? null}
+              showOfficial={showOfficial}
+            />
           </div>
         </nav>
       </div>

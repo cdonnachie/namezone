@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ShieldCheck, Lock, Globe2, Ban, ShieldAlert } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BadgeCheck, ShieldCheck, Lock, Globe2, Ban, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { NamespaceLogo } from "@/components/namespace-logo";
 import { getSession } from "@/lib/auth/session";
+import { sourceNameToBaseFqdn } from "@/lib/dns/validation";
 import { getNamespace } from "@/lib/namespaces";
+import { listVerifiedTeamNames } from "@/lib/verified-names";
 
 export default async function NamespaceLandingPage({
   params,
@@ -25,6 +27,7 @@ export default async function NamespaceLandingPage({
   const primaryHref = session ? `/${ns.key}/dashboard` : `/${ns.key}/connect`;
   const primaryLabel = session ? "Go to Dashboard" : "Connect Wallet";
   const primaryExample = ns.exampleNames[0];
+  const verifiedNames = await listVerifiedTeamNames(ns);
 
   return (
     <div className="mx-auto max-w-6xl px-4">
@@ -91,6 +94,47 @@ export default async function NamespaceLandingPage({
           </CardContent>
         </Card>
       </section>
+
+      {verifiedNames.length > 0 && (
+        <section className="pb-16">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BadgeCheck className="size-5 text-primary" /> Official {ns.chainName} team sites
+              </CardTitle>
+              <CardDescription>
+                Verified against on-chain ownership &mdash; every other {ns.dnsZone} subdomain
+                is run by an independent name owner.{" "}
+                <Link
+                  href={`/${ns.key}/official`}
+                  className="font-medium text-primary underline underline-offset-4"
+                >
+                  See the full list
+                </Link>
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {verifiedNames.map((name) => {
+                const zone = sourceNameToBaseFqdn(name, ns).replace(/\.$/, "");
+                return (
+                  <a
+                    key={name}
+                    href={`https://${zone}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/30 px-3 py-1.5 font-mono text-sm font-medium transition-colors hover:border-primary/50 hover:bg-accent"
+                  >
+                    <BadgeCheck className="size-3.5 text-primary" />
+                    {zone}
+                    <ArrowUpRight className="size-3.5 text-muted-foreground" />
+                  </a>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       <section className="pb-16">
         <Alert className="border-primary/30 bg-primary/10 p-4 has-[>svg]:gap-x-3 [&>svg]:text-primary">

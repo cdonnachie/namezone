@@ -18,7 +18,15 @@ import { truncateAddress } from "@/lib/utils";
 
 /** Hamburger menu shown below the `md` breakpoint - the inline nav links
  * and auth actions don't fit next to the brand name on phone widths. */
-export function MobileNav({ namespace, address }: { namespace: string; address: string | null }) {
+export function MobileNav({
+  namespace,
+  address,
+  showOfficial = false,
+}: {
+  namespace: string;
+  address: string | null;
+  showOfficial?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
 
   async function handleDisconnect() {
@@ -59,6 +67,11 @@ export function MobileNav({ namespace, address }: { namespace: string; address: 
         <DropdownMenuItem asChild>
           <Link href={`/${namespace}/lookup`}>Lookup</Link>
         </DropdownMenuItem>
+        {showOfficial && (
+          <DropdownMenuItem asChild>
+            <Link href={`/${namespace}/official`}>Official</Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href={`/${namespace}/help`}>Help</Link>
         </DropdownMenuItem>

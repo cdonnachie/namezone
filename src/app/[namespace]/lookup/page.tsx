@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Search } from "lucide-react";
+import { BadgeCheck, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { prisma } from "@/lib/db";
 import { getNamespace } from "@/lib/namespaces";
 import { sourceNameToBaseFqdn, validateSourceName } from "@/lib/dns/validation";
+import { isVerifiedTeamName } from "@/lib/verified-names";
 
 export default async function LookupPage({
   params,
@@ -29,6 +30,7 @@ export default async function LookupPage({
 
   let error: string | null = null;
   let resolvedName: string | null = null;
+  let verified = false;
   let records: Awaited<ReturnType<typeof prisma.dnsRecord.findMany>> = [];
 
   if (query) {
@@ -37,10 +39,13 @@ export default async function LookupPage({
       error = parsed.error;
     } else {
       resolvedName = parsed.value;
-      records = await prisma.dnsRecord.findMany({
-        where: { namespace: ns.key, claimedName: parsed.value, status: "ACTIVE", isAcmeChallenge: false },
-        orderBy: [{ relativeHost: "asc" }, { type: "asc" }],
-      });
+      [records, verified] = await Promise.all([
+        prisma.dnsRecord.findMany({
+          where: { namespace: ns.key, claimedName: parsed.value, status: "ACTIVE", isAcmeChallenge: false },
+          orderBy: [{ relativeHost: "asc" }, { type: "asc" }],
+        }),
+        isVerifiedTeamName(ns, parsed.value),
+      ]);
     }
   }
 
@@ -74,8 +79,21 @@ export default async function LookupPage({
       {resolvedName && !error && (
         <Card>
           <CardHeader>
-            <CardTitle className="break-all font-mono text-base">{sourceNameToBaseFqdn(resolvedName, ns)}</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2 break-all font-mono text-base">
+              {sourceNameToBaseFqdn(resolvedName, ns)}
+              {verified && (
+                <Badge className="font-sans">
+                  <BadgeCheck className="size-3.5" /> Core team
+                </Badge>
+              )}
+            </CardTitle>
             <CardDescription>
+              {verified && (
+                <>
+                  Operated by the {ns.chainName} core team &mdash; verified against on-chain
+                  ownership.{" "}
+                </>
+              )}
               {records.length} active record{records.length === 1 ? "" : "s"}
             </CardDescription>
           </CardHeader>

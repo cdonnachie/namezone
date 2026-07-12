@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getNamespace } from "@/lib/namespaces";
@@ -68,6 +69,33 @@ export default async function HelpPage({
             every write is checked against live {ns.chainName} ownership first. If the name is
             ever transferred to a new owner, the previous owner&apos;s records are disabled
             automatically and the new owner starts with a clean slate.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>How do I know a site is official?</CardTitle>
+          <CardDescription>
+            Every name under {ns.dnsZone} is run by whoever owns it on-chain - so an
+            official-sounding name isn&apos;t automatically the {ns.chainName} team&apos;s.
+            Names genuinely operated by the core team show a &quot;Core team&quot; badge on the{" "}
+            <Link
+              href={`/${ns.key}/lookup`}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              DNS lookup page
+            </Link>{" "}
+            and are listed on the{" "}
+            <Link
+              href={`/${ns.key}/official`}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              official sites page
+            </Link>
+            . The badge is tied to on-chain ownership, so if a team name were ever sold it
+            disappears automatically. And don&apos;t trust a badge shown on a website itself -
+            anyone can copy an image; check the name here instead.
           </CardDescription>
         </CardHeader>
       </Card>
