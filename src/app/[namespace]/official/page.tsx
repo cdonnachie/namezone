@@ -33,7 +33,7 @@ export default async function OfficialSitesPage({
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Official {ns.chainName} sites</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Names operated by the {ns.chainName} core team. Anything under {ns.dnsZone} that
+          Names operated by the {ns.chainName} project itself. Anything under {ns.dnsZone} that
           isn&apos;t listed here is run by an independent name owner &mdash; treat it like any
           unrelated website.
         </p>
@@ -42,11 +42,11 @@ export default async function OfficialSitesPage({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <BadgeCheck className="size-5 text-primary" /> Verified team names
+            <BadgeCheck className="size-5 text-primary" /> Verified official names
           </CardTitle>
           <CardDescription>
             Verification is tied to on-chain ownership, not just the name: a name only appears
-            here while the wallet holding it matches the address the team registered with us.
+            here while the wallet holding it matches the address the project registered with us.
             If the name is ever sold or transferred, it drops off this list automatically.
           </CardDescription>
         </CardHeader>
@@ -62,7 +62,7 @@ export default async function OfficialSitesPage({
                 return (
                   <li key={name} className="flex flex-wrap items-center gap-2 py-3">
                     <Badge className="font-sans">
-                      <BadgeCheck className="size-3.5" /> Core team
+                      <BadgeCheck className="size-3.5" /> Official
                     </Badge>
                     <a
                       href={`https://${zone}`}
@@ -96,8 +96,8 @@ export default async function OfficialSitesPage({
       </p>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        {ns.chainName} core-team member with a name that should be listed here? Reach out in the
-        community Discord or via the{" "}
+        Work on the {ns.chainName} project and have a name that should be listed here? Reach out
+        in the community Discord or via the{" "}
         <Link href={`/${ns.key}/help#abuse`} className="underline underline-offset-2 hover:text-foreground">
           contact address on the help page
         </Link>{" "}

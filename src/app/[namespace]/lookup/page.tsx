@@ -83,14 +83,14 @@ export default async function LookupPage({
               {sourceNameToBaseFqdn(resolvedName, ns)}
               {verified && (
                 <Badge className="font-sans">
-                  <BadgeCheck className="size-3.5" /> Core team
+                  <BadgeCheck className="size-3.5" /> Official
                 </Badge>
               )}
             </CardTitle>
             <CardDescription>
               {verified && (
                 <>
-                  Operated by the {ns.chainName} core team &mdash; verified against on-chain
+                  An official {ns.chainName} project name &mdash; verified against on-chain
                   ownership.{" "}
                 </>
               )}

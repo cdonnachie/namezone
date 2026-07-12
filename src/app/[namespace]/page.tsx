@@ -100,7 +100,7 @@ export default async function NamespaceLandingPage({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BadgeCheck className="size-5 text-primary" /> Official {ns.chainName} team sites
+                <BadgeCheck className="size-5 text-primary" /> Official {ns.chainName} sites
               </CardTitle>
               <CardDescription>
                 Verified against on-chain ownership &mdash; every other {ns.dnsZone} subdomain

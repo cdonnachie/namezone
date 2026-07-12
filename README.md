@@ -267,17 +267,21 @@ submitting `?name=...` back to itself (no client JS required), rendering whateve
 non-ACME-challenge `DnsRecord` rows exist for that claimed name. Linked from the nav bar
 regardless of session state.
 
-## Core-team verified names
+## Official (project-verified) names
 
 Every subdomain is run by whoever owns the name on-chain, so an official-sounding name
-(`brand.avn`) isn't automatically the team's. `VERIFIED_TEAM_NAMES` (JSON map of full source
-name → team-held owner address — see `.env.example`) marks the genuinely official ones. A name
+(`brand.avn`) isn't automatically the project's. `VERIFIED_TEAM_NAMES` (JSON map of full source
+name → project-held owner address — see `.env.example`) marks the genuinely official ones. A name
 counts as verified only while its **current** owner matches the configured address, checked
 against the `ClaimedName` cache (kept honest by per-visit ownership checks plus the background
 watcher) — selling the asset drops the badge automatically, within one watcher sweep at worst.
+(The badge says "Official", deliberately not "Core team" — Radiant is a loose group of
+contributors rather than a formal team, and "official" describes the project's endorsement
+without implying an org chart. A bare "Verified" would be worse: every name here is
+ownership-verified; this badge marks the project's own names.)
 
-Surfaces (`src/lib/verified-names.ts`): a "Core team" badge on the lookup page, a public
-registry at `/[namespace]/official` (linked from the landing page when non-empty), and
+Surfaces (`src/lib/verified-names.ts`): an "Official" badge on the lookup page, a public
+registry at `/[namespace]/official` (nav item + landing-page card appear once configured), and
 `GET /api/[namespace]/verified` (JSON, cacheable) for explorers/wallets. Deliberately **no**
 embeddable badge widget — a badge rendered by the site being verified is just copyable pixels;
 the help page instead documents linking to the name's own lookup page ("verify this site"),

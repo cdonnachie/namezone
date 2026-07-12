@@ -78,8 +78,8 @@ export default async function HelpPage({
           <CardTitle>How do I know a site is official?</CardTitle>
           <CardDescription>
             Every name under {ns.dnsZone} is run by whoever owns it on-chain - so an
-            official-sounding name isn&apos;t automatically the {ns.chainName} team&apos;s.
-            Names genuinely operated by the core team show a &quot;Core team&quot; badge on the{" "}
+            official-sounding name isn&apos;t automatically the {ns.chainName} project&apos;s.
+            Names genuinely operated by the project show an &quot;Official&quot; badge on the{" "}
             <Link
               href={`/${ns.key}/lookup`}
               className="font-medium text-primary underline underline-offset-4"
