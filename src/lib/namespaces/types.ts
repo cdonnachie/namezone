@@ -44,7 +44,12 @@ export interface NamespaceConfig extends DnsNamespace {
   displayName: string;
   /** e.g. "Avian" */
   chainName: string;
-  /** e.g. "/avianlogo.png". Used as-is in dark mode unless logoPathDark is set. */
+  /**
+   * Full network name for first-mention contexts (brand guidelines: "Avian
+   * Network" on first mention, "Avian" thereafter). Falls back to chainName.
+   */
+  networkName?: string;
+  /** e.g. "/logomark-gradient.svg". Used as-is in dark mode unless logoPathDark is set. */
   logoPath: string;
   /** Dark-mode variant of logoPath, for chains whose mark needs different contrast per theme. */
   logoPathDark?: string;

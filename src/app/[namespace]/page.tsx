@@ -34,7 +34,7 @@ export default async function NamespaceLandingPage({
       <section className="flex flex-col items-center gap-6 py-20 text-center sm:py-28">
         <NamespaceLogo namespace={ns} size={72} priority alt={ns.chainName} />
         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          Powered by {ns.chainName}
+          Powered by {ns.networkName ?? ns.chainName}
         </p>
         {primaryExample && (
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
