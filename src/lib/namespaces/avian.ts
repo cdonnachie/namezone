@@ -8,9 +8,12 @@ export const avianNamespace: NamespaceConfig = {
   networkName: "Avian Network",
   tld: "avn",
   dnsZone: (process.env.AVIAN_DNS_ZONE ?? "avn.zone").trim().toLowerCase(),
-  // Brand guidelines: gradient mark on light backgrounds, white mark on dark.
+  // Brand guidelines: gradient marks on light backgrounds, white on dark;
+  // logomark for small placements, wordmark where the name is spelled out.
   logoPath: "/logomark-gradient.svg",
   logoPathDark: "/logomark-white.svg",
+  wordmarkPath: "/wordmark-gradient.svg",
+  wordmarkPathDark: "/wordmark-white.svg",
   faviconPath: "/avian.ico",
   brandColor: "#19827a",
   // `source` is always the claimable single-label name: sub-shaped on-chain

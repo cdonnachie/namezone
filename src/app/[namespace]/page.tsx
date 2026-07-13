@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUpRight, BadgeCheck, ShieldCheck, Lock, Globe2, Ban, S
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { NamespaceLogo } from "@/components/namespace-logo";
+import { NamespaceLogo, NamespaceWordmark } from "@/components/namespace-logo";
 import { getSession } from "@/lib/auth/session";
 import { sourceNameToBaseFqdn } from "@/lib/dns/validation";
 import { getNamespace } from "@/lib/namespaces";
@@ -32,10 +32,24 @@ export default async function NamespaceLandingPage({
   return (
     <div className="mx-auto max-w-6xl px-4">
       <section className="flex flex-col items-center gap-6 py-20 text-center sm:py-28">
-        <NamespaceLogo namespace={ns} size={72} priority alt={ns.chainName} />
-        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          Powered by {ns.networkName ?? ns.chainName}
-        </p>
+        {/* The wordmark already spells out the network name, so the
+            "Powered by" caption only accompanies the square logomark. */}
+        {ns.wordmarkPath ? (
+          <NamespaceWordmark
+            namespace={ns}
+            height={72}
+            width={192}
+            priority
+            alt={ns.networkName ?? ns.chainName}
+          />
+        ) : (
+          <>
+            <NamespaceLogo namespace={ns} size={72} priority alt={ns.chainName} />
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Powered by {ns.networkName ?? ns.chainName}
+            </p>
+          </>
+        )}
         {primaryExample && (
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">
             Own <span className="text-primary">{primaryExample.source}</span>,<br />
@@ -43,9 +57,12 @@ export default async function NamespaceLandingPage({
           </h1>
         )}
         <p className="max-w-xl text-balance text-muted-foreground sm:text-lg">
-          Lets verified owners of a {ns.chainName === "Radiant" ? ns.chainName + " Wave Name" : ns.chainName + " Name"}  manage public DNS
-          records for their namespace &mdash; point at GitHub Pages, Vercel, or Netlify with a
-          CNAME, get a real SSL certificate, no shared registrar required.
+          Lets verified owners of{" "}
+          {ns.chainName === "Radiant"
+            ? `a ${ns.chainName} Wave Name`
+            : `${/^[aeiou]/i.test(ns.chainName) ? "an" : "a"} ${ns.chainName} Name`}{" "}
+          manage public DNS records for their namespace &mdash; point at GitHub Pages, Vercel,
+          or Netlify with a CNAME, get a real SSL certificate, no shared registrar required.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Button asChild size="lg">

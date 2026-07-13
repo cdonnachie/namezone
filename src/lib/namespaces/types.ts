@@ -53,6 +53,14 @@ export interface NamespaceConfig extends DnsNamespace {
   logoPath: string;
   /** Dark-mode variant of logoPath, for chains whose mark needs different contrast per theme. */
   logoPathDark?: string;
+  /**
+   * Wordmark (logotype spelling out the network name), used where the brand
+   * wants the name spelled out - e.g. the landing hero. Falls back to the
+   * logomark when absent. Wide aspect (~2.7:1), unlike the square logomark.
+   */
+  wordmarkPath?: string;
+  /** Dark-mode variant of wordmarkPath. */
+  wordmarkPathDark?: string;
   /** e.g. "/avian.ico" */
   faviconPath: string;
   /** Brand accent color (hex) used for this namespace's theme scoping. */

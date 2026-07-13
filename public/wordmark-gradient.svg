@@ -1,0 +1,866 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 577.92 216.96"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg107"
+   sodipodi:docname="wordmark-gradient.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <sodipodi:namedview
+     id="namedview107"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="3.1855621"
+     inkscape:cx="267.29976"
+     inkscape:cy="88.36745"
+     inkscape:window-width="3840"
+     inkscape:window-height="2054"
+     inkscape:window-x="-11"
+     inkscape:window-y="-11"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg107" />
+  <title
+     id="title">Avian Network</title>
+  <desc
+     id="desc">Vector Avian Network logo</desc>
+  <defs
+     id="defs77">
+    <linearGradient
+       id="a1-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#08aeb3"
+         stop-opacity="1"
+         id="stop1" />
+      <stop
+         offset="43%"
+         stop-color="#55c3b4"
+         stop-opacity="1"
+         id="stop2" />
+      <stop
+         offset="100%"
+         stop-color="#10b77b"
+         stop-opacity="1"
+         id="stop3" />
+    </linearGradient>
+    <radialGradient
+       id="a1-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="8%"
+       cy="72%"
+       r="82%"
+       fx="8%"
+       fy="72%">
+      <stop
+         offset="0%"
+         stop-color="#176779"
+         stop-opacity="0.95"
+         id="stop4" />
+      <stop
+         offset="50%"
+         stop-color="#176779"
+         stop-opacity="0.62"
+         id="stop5" />
+      <stop
+         offset="100%"
+         stop-color="#176779"
+         stop-opacity="0"
+         id="stop6" />
+    </radialGradient>
+    <radialGradient
+       id="a1-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="76%"
+       cy="12%"
+       r="72%"
+       fx="76%"
+       fy="12%">
+      <stop
+         offset="0%"
+         stop-color="#8ad6bf"
+         stop-opacity="0.42"
+         id="stop7" />
+      <stop
+         offset="100%"
+         stop-color="#8ad6bf"
+         stop-opacity="0"
+         id="stop8" />
+    </radialGradient>
+    <linearGradient
+       id="v-base"
+       gradientUnits="objectBoundingBox"
+       x1="8%"
+       y1="0%"
+       x2="80%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#0eafb2"
+         stop-opacity="1"
+         id="stop9" />
+      <stop
+         offset="48%"
+         stop-color="#70cbc3"
+         stop-opacity="1"
+         id="stop10" />
+      <stop
+         offset="100%"
+         stop-color="#21857a"
+         stop-opacity="1"
+         id="stop11" />
+    </linearGradient>
+    <radialGradient
+       id="v-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="92%"
+       cy="4%"
+       r="62%"
+       fx="92%"
+       fy="4%">
+      <stop
+         offset="0%"
+         stop-color="#176a7a"
+         stop-opacity="0.92"
+         id="stop12" />
+      <stop
+         offset="100%"
+         stop-color="#176a7a"
+         stop-opacity="0"
+         id="stop13" />
+    </radialGradient>
+    <radialGradient
+       id="v-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="73%"
+       cy="62%"
+       r="55%"
+       fx="73%"
+       fy="62%">
+      <stop
+         offset="0%"
+         stop-color="#43bf8c"
+         stop-opacity="0.55"
+         id="stop14" />
+      <stop
+         offset="100%"
+         stop-color="#43bf8c"
+         stop-opacity="0"
+         id="stop15" />
+    </radialGradient>
+    <radialGradient
+       id="v-overlay-3"
+       gradientUnits="objectBoundingBox"
+       cx="45%"
+       cy="100%"
+       r="48%"
+       fx="45%"
+       fy="100%">
+      <stop
+         offset="0%"
+         stop-color="#15727a"
+         stop-opacity="0.7"
+         id="stop16" />
+      <stop
+         offset="100%"
+         stop-color="#15727a"
+         stop-opacity="0"
+         id="stop17" />
+    </radialGradient>
+    <linearGradient
+       id="i-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="0%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#10afa5"
+         stop-opacity="1"
+         id="stop18" />
+      <stop
+         offset="30%"
+         stop-color="#6bccc0"
+         stop-opacity="1"
+         id="stop19" />
+      <stop
+         offset="49%"
+         stop-color="#8bd5cd"
+         stop-opacity="1"
+         id="stop20" />
+      <stop
+         offset="66%"
+         stop-color="#1e6d7b"
+         stop-opacity="1"
+         id="stop21" />
+      <stop
+         offset="100%"
+         stop-color="#0db17e"
+         stop-opacity="1"
+         id="stop22" />
+    </linearGradient>
+    <radialGradient
+       id="i-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="92%"
+       cy="4%"
+       r="58%"
+       fx="92%"
+       fy="4%">
+      <stop
+         offset="0%"
+         stop-color="#16687a"
+         stop-opacity="0.84"
+         id="stop23" />
+      <stop
+         offset="100%"
+         stop-color="#16687a"
+         stop-opacity="0"
+         id="stop24" />
+    </radialGradient>
+    <radialGradient
+       id="i-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="8%"
+       cy="92%"
+       r="58%"
+       fx="8%"
+       fy="92%">
+      <stop
+         offset="0%"
+         stop-color="#176b79"
+         stop-opacity="0.62"
+         id="stop25" />
+      <stop
+         offset="100%"
+         stop-color="#176b79"
+         stop-opacity="0"
+         id="stop26" />
+    </radialGradient>
+    <linearGradient
+       id="a2-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#08aeb3"
+         stop-opacity="1"
+         id="stop27" />
+      <stop
+         offset="43%"
+         stop-color="#55c3b4"
+         stop-opacity="1"
+         id="stop28" />
+      <stop
+         offset="100%"
+         stop-color="#10b77b"
+         stop-opacity="1"
+         id="stop29" />
+    </linearGradient>
+    <radialGradient
+       id="a2-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="8%"
+       cy="72%"
+       r="82%"
+       fx="8%"
+       fy="72%">
+      <stop
+         offset="0%"
+         stop-color="#176779"
+         stop-opacity="0.95"
+         id="stop30" />
+      <stop
+         offset="50%"
+         stop-color="#176779"
+         stop-opacity="0.62"
+         id="stop31" />
+      <stop
+         offset="100%"
+         stop-color="#176779"
+         stop-opacity="0"
+         id="stop32" />
+    </radialGradient>
+    <radialGradient
+       id="a2-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="76%"
+       cy="12%"
+       r="72%"
+       fx="76%"
+       fy="12%">
+      <stop
+         offset="0%"
+         stop-color="#8ad6bf"
+         stop-opacity="0.42"
+         id="stop33" />
+      <stop
+         offset="100%"
+         stop-color="#8ad6bf"
+         stop-opacity="0"
+         id="stop34" />
+    </radialGradient>
+    <linearGradient
+       id="n-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="75%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#0caea9"
+         stop-opacity="1"
+         id="stop35" />
+      <stop
+         offset="42%"
+         stop-color="#74cbc1"
+         stop-opacity="1"
+         id="stop36" />
+      <stop
+         offset="100%"
+         stop-color="#12b77e"
+         stop-opacity="1"
+         id="stop37" />
+    </linearGradient>
+    <radialGradient
+       id="n-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="91%"
+       cy="6%"
+       r="58%"
+       fx="91%"
+       fy="6%">
+      <stop
+         offset="0%"
+         stop-color="#176a7b"
+         stop-opacity="0.94"
+         id="stop38" />
+      <stop
+         offset="100%"
+         stop-color="#176a7b"
+         stop-opacity="0"
+         id="stop39" />
+    </radialGradient>
+    <radialGradient
+       id="n-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="4%"
+       cy="72%"
+       r="67%"
+       fx="4%"
+       fy="72%">
+      <stop
+         offset="0%"
+         stop-color="#176779"
+         stop-opacity="0.94"
+         id="stop40" />
+      <stop
+         offset="100%"
+         stop-color="#176779"
+         stop-opacity="0"
+         id="stop41" />
+    </radialGradient>
+    <radialGradient
+       id="n-overlay-3"
+       gradientUnits="objectBoundingBox"
+       cx="55%"
+       cy="43%"
+       r="50%"
+       fx="55%"
+       fy="43%">
+      <stop
+         offset="0%"
+         stop-color="#9adbd3"
+         stop-opacity="0.3"
+         id="stop42" />
+      <stop
+         offset="100%"
+         stop-color="#9adbd3"
+         stop-opacity="0"
+         id="stop43" />
+    </radialGradient>
+    <linearGradient
+       id="N-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#10afae"
+         stop-opacity="1"
+         id="stop44" />
+      <stop
+         offset="48%"
+         stop-color="#15aaa2"
+         stop-opacity="1"
+         id="stop45" />
+      <stop
+         offset="100%"
+         stop-color="#16ba79"
+         stop-opacity="1"
+         id="stop46" />
+    </linearGradient>
+    <linearGradient
+       id="E-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="10%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#11aeb1"
+         stop-opacity="1"
+         id="stop47" />
+      <stop
+         offset="48%"
+         stop-color="#76cec4"
+         stop-opacity="1"
+         id="stop48" />
+      <stop
+         offset="100%"
+         stop-color="#11b77d"
+         stop-opacity="1"
+         id="stop49" />
+    </linearGradient>
+    <linearGradient
+       id="T-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#10adb3"
+         stop-opacity="1"
+         id="stop50" />
+      <stop
+         offset="100%"
+         stop-color="#1b9fb0"
+         stop-opacity="1"
+         id="stop51" />
+    </linearGradient>
+    <linearGradient
+       id="W-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#78cdc9"
+         stop-opacity="1"
+         id="stop52" />
+      <stop
+         offset="47%"
+         stop-color="#18aeb8"
+         stop-opacity="1"
+         id="stop53" />
+      <stop
+         offset="100%"
+         stop-color="#0092aa"
+         stop-opacity="1"
+         id="stop54" />
+    </linearGradient>
+    <radialGradient
+       id="W-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="80%"
+       cy="90%"
+       r="50%"
+       fx="80%"
+       fy="90%">
+      <stop
+         offset="0%"
+         stop-color="#126a7b"
+         stop-opacity="0.42"
+         id="stop55" />
+      <stop
+         offset="100%"
+         stop-color="#126a7b"
+         stop-opacity="0"
+         id="stop56" />
+    </radialGradient>
+    <linearGradient
+       id="O-base"
+       gradientUnits="objectBoundingBox"
+       x1="70%"
+       y1="0%"
+       x2="25%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#1ba9b2"
+         stop-opacity="1"
+         id="stop57" />
+      <stop
+         offset="38%"
+         stop-color="#75cbc5"
+         stop-opacity="1"
+         id="stop58" />
+      <stop
+         offset="100%"
+         stop-color="#0d8e9c"
+         stop-opacity="1"
+         id="stop59" />
+    </linearGradient>
+    <radialGradient
+       id="O-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="12%"
+       cy="92%"
+       r="62%"
+       fx="12%"
+       fy="92%">
+      <stop
+         offset="0%"
+         stop-color="#075d70"
+         stop-opacity="0.96"
+         id="stop60" />
+      <stop
+         offset="100%"
+         stop-color="#075d70"
+         stop-opacity="0"
+         id="stop61" />
+    </radialGradient>
+    <radialGradient
+       id="O-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="18%"
+       cy="12%"
+       r="45%"
+       fx="18%"
+       fy="12%">
+      <stop
+         offset="0%"
+         stop-color="#b0e3db"
+         stop-opacity="0.32"
+         id="stop62" />
+      <stop
+         offset="100%"
+         stop-color="#b0e3db"
+         stop-opacity="0"
+         id="stop63" />
+    </radialGradient>
+    <linearGradient
+       id="R-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="55%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#0daeb0"
+         stop-opacity="1"
+         id="stop64" />
+      <stop
+         offset="43%"
+         stop-color="#84d2ca"
+         stop-opacity="1"
+         id="stop65" />
+      <stop
+         offset="100%"
+         stop-color="#1e8a89"
+         stop-opacity="1"
+         id="stop66" />
+    </linearGradient>
+    <radialGradient
+       id="R-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="78%"
+       cy="18%"
+       r="58%"
+       fx="78%"
+       fy="18%">
+      <stop
+         offset="0%"
+         stop-color="#176b7b"
+         stop-opacity="0.78"
+         id="stop67" />
+      <stop
+         offset="100%"
+         stop-color="#176b7b"
+         stop-opacity="0"
+         id="stop68" />
+    </radialGradient>
+    <radialGradient
+       id="R-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="25%"
+       cy="93%"
+       r="55%"
+       fx="25%"
+       fy="93%">
+      <stop
+         offset="0%"
+         stop-color="#126578"
+         stop-opacity="0.65"
+         id="stop69" />
+      <stop
+         offset="100%"
+         stop-color="#126578"
+         stop-opacity="0"
+         id="stop70" />
+    </radialGradient>
+    <linearGradient
+       id="K-base"
+       gradientUnits="objectBoundingBox"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#218688"
+         stop-opacity="1"
+         id="stop71" />
+      <stop
+         offset="47%"
+         stop-color="#208b91"
+         stop-opacity="1"
+         id="stop72" />
+      <stop
+         offset="100%"
+         stop-color="#12b878"
+         stop-opacity="1"
+         id="stop73" />
+    </linearGradient>
+    <radialGradient
+       id="K-overlay-1"
+       gradientUnits="objectBoundingBox"
+       cx="92%"
+       cy="3%"
+       r="58%"
+       fx="92%"
+       fy="3%">
+      <stop
+         offset="0%"
+         stop-color="#176779"
+         stop-opacity="0.82"
+         id="stop74" />
+      <stop
+         offset="100%"
+         stop-color="#176779"
+         stop-opacity="0"
+         id="stop75" />
+    </radialGradient>
+    <radialGradient
+       id="K-overlay-2"
+       gradientUnits="objectBoundingBox"
+       cx="8%"
+       cy="62%"
+       r="55%"
+       fx="8%"
+       fy="62%">
+      <stop
+         offset="0%"
+         stop-color="#176779"
+         stop-opacity="0.52"
+         id="stop76" />
+      <stop
+         offset="100%"
+         stop-color="#176779"
+         stop-opacity="0"
+         id="stop77" />
+    </radialGradient>
+  </defs>
+  <g
+     id="logo">
+    <g
+       id="letter-a1">
+      <path
+         fill="url(#a1-base)"
+         d="M53.76,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68H84l-5.76-21.12H76.32C67,117.12,52.8,123.36,37.2,123.36c-26.64,0-37.2-18-37.2-37C0,58.08,21.84,49,44.16,49H76.08V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32H7.92V7.44A146.73,146.73,0,0,1,53.76,0ZM73.92,61.2l-7,1.2H50.16c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path77" />
+      <path
+         fill="url(#a1-overlay-1)"
+         d="M53.76,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68H84l-5.76-21.12H76.32C67,117.12,52.8,123.36,37.2,123.36c-26.64,0-37.2-18-37.2-37C0,58.08,21.84,49,44.16,49H76.08V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32H7.92V7.44A146.73,146.73,0,0,1,53.76,0ZM73.92,61.2l-7,1.2H50.16c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path78" />
+      <path
+         fill="url(#a1-overlay-2)"
+         d="M53.76,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68H84l-5.76-21.12H76.32C67,117.12,52.8,123.36,37.2,123.36c-26.64,0-37.2-18-37.2-37C0,58.08,21.84,49,44.16,49H76.08V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32H7.92V7.44A146.73,146.73,0,0,1,53.76,0ZM73.92,61.2l-7,1.2H50.16c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path79" />
+    </g>
+    <g
+       id="letter-v">
+      <path
+         fill="url(#v-base)"
+         d="M166.56,121.68C148.8,92.16,130.32,43,125.28,3.84l1.92-2.16h28.56c3.6,35.52,15.12,76.8,26.16,102.48h1.44c11-25.68,22.56-67.2,25.92-102.48H236.4l2.16,2.16C233.28,43,214.8,92.16,196.32,121.68Z"
+         id="path80" />
+      <path
+         fill="url(#v-overlay-1)"
+         d="M166.56,121.68C148.8,92.16,130.32,43,125.28,3.84l1.92-2.16h28.56c3.6,35.52,15.12,76.8,26.16,102.48h1.44c11-25.68,22.56-67.2,25.92-102.48H236.4l2.16,2.16C233.28,43,214.8,92.16,196.32,121.68Z"
+         id="path81" />
+      <path
+         fill="url(#v-overlay-2)"
+         d="M166.56,121.68C148.8,92.16,130.32,43,125.28,3.84l1.92-2.16h28.56c3.6,35.52,15.12,76.8,26.16,102.48h1.44c11-25.68,22.56-67.2,25.92-102.48H236.4l2.16,2.16C233.28,43,214.8,92.16,196.32,121.68Z"
+         id="path82" />
+      <path
+         fill="url(#v-overlay-3)"
+         d="M166.56,121.68C148.8,92.16,130.32,43,125.28,3.84l1.92-2.16h28.56c3.6,35.52,15.12,76.8,26.16,102.48h1.44c11-25.68,22.56-67.2,25.92-102.48H236.4l2.16,2.16C233.28,43,214.8,92.16,196.32,121.68Z"
+         id="path83" />
+    </g>
+    <g
+       id="letter-i">
+      <path
+         fill="url(#i-base)"
+         d="M289.44,1.68v120H260.88V1.68Z"
+         id="path84" />
+      <path
+         fill="url(#i-overlay-1)"
+         d="M289.44,1.68v120H260.88V1.68Z"
+         id="path85" />
+      <path
+         fill="url(#i-overlay-2)"
+         d="M289.44,1.68v120H260.88V1.68Z"
+         id="path86" />
+    </g>
+    <g
+       id="letter-a2">
+      <path
+         fill="url(#a2-base)"
+         d="M369.6,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68h-22.8l-5.76-21.12h-1.92c-9.36,16.56-23.52,22.8-39.12,22.8-26.64,0-37.2-18-37.2-37C315.84,58.08,337.68,49,360,49h31.92V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32h-2.64V7.44A146.73,146.73,0,0,1,369.6,0Zm20.16,61.2-7,1.2H366c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path87" />
+      <path
+         fill="url(#a2-overlay-1)"
+         d="M369.6,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68h-22.8l-5.76-21.12h-1.92c-9.36,16.56-23.52,22.8-39.12,22.8-26.64,0-37.2-18-37.2-37C315.84,58.08,337.68,49,360,49h31.92V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32h-2.64V7.44A146.73,146.73,0,0,1,369.6,0Zm20.16,61.2-7,1.2H366c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path88" />
+      <path
+         fill="url(#a2-overlay-2)"
+         d="M369.6,0c34.08,0,50.88,14.4,50.88,43.2V81.6l4.08,38.4-1.92,1.68h-22.8l-5.76-21.12h-1.92c-9.36,16.56-23.52,22.8-39.12,22.8-26.64,0-37.2-18-37.2-37C315.84,58.08,337.68,49,360,49h31.92V43.44c0-17.28-9.36-26.88-28.32-26.88-13,0-25.92,4.08-37.2,10.32h-2.64V7.44A146.73,146.73,0,0,1,369.6,0Zm20.16,61.2-7,1.2H366c-13.68,0-21.6,7.2-21.6,22.08,0,12.24,6,22.32,20.64,22.32,15.84,0,26.88-14.4,26.88-36.72V61.2Z"
+         id="path89" />
+    </g>
+    <g
+       id="letter-n">
+      <path
+         fill="url(#n-base)"
+         d="M472.32,1.68l6,21.12h1.92C489.12,6.24,505.44,0,521.76,0c25.68,0,40.08,15.6,40.08,41.76v79.92H533.28V46.56c0-22.8-10.56-30-23-30-17.28,0-30,14.4-30,37.2v67.92H451.68V41.76L447.84,3.6l1.68-1.92Z"
+         id="path90" />
+      <path
+         fill="url(#n-overlay-1)"
+         d="M472.32,1.68l6,21.12h1.92C489.12,6.24,505.44,0,521.76,0c25.68,0,40.08,15.6,40.08,41.76v79.92H533.28V46.56c0-22.8-10.56-30-23-30-17.28,0-30,14.4-30,37.2v67.92H451.68V41.76L447.84,3.6l1.68-1.92Z"
+         id="path91" />
+      <path
+         fill="url(#n-overlay-2)"
+         d="M472.32,1.68l6,21.12h1.92C489.12,6.24,505.44,0,521.76,0c25.68,0,40.08,15.6,40.08,41.76v79.92H533.28V46.56c0-22.8-10.56-30-23-30-17.28,0-30,14.4-30,37.2v67.92H451.68V41.76L447.84,3.6l1.68-1.92Z"
+         id="path92" />
+      <path
+         fill="url(#n-overlay-3)"
+         d="M472.32,1.68l6,21.12h1.92C489.12,6.24,505.44,0,521.76,0c25.68,0,40.08,15.6,40.08,41.76v79.92H533.28V46.56c0-22.8-10.56-30-23-30-17.28,0-30,14.4-30,37.2v67.92H451.68V41.76L447.84,3.6l1.68-1.92Z"
+         id="path93" />
+    </g>
+    <g
+       id="letter-N">
+      <path
+         fill="url(#N-base)"
+         d="M39.07,206.05,7.65,169.35v36.7h-2V166.71H7.94l31.47,36.81V166.71h2v39.34Z"
+         id="path94" />
+    </g>
+    <g
+       id="letter-E">
+      <path
+         fill="url(#E-base)"
+         d="M93.66,206.05V166.71h31v1.74h-29v16.47h26.64v1.74H95.68v17.65h29v1.74Z"
+         id="path95" />
+    </g>
+    <g
+       id="letter-T">
+      <path
+         fill="url(#T-base)"
+         d="M189.15,206.05v-37.6H172.07v-1.74h36.19v1.74H191.18v37.6Z"
+         id="path96" />
+    </g>
+    <g
+       id="letter-W">
+      <path
+         fill="url(#W-base)"
+         d="M295.67,206.05l-12.42-36.81-12.42,36.81H267.9l-13.65-39.34h2.13l12.87,37.6h.12L282,166.71h2.42l12.64,37.6h.11l12.87-37.6h2.14l-13.66,39.34Z"
+         id="path97" />
+      <path
+         fill="url(#W-overlay-1)"
+         d="M295.67,206.05l-12.42-36.81-12.42,36.81H267.9l-13.65-39.34h2.13l12.87,37.6h.12L282,166.71h2.42l12.64,37.6h.11l12.87-37.6h2.14l-13.66,39.34Z"
+         id="path98" />
+    </g>
+    <g
+       id="letter-O">
+      <path
+         fill="url(#O-base)"
+         d="M358.68,186.38c0-13.26,9-20.34,21.58-20.34s21.58,7.08,21.58,20.34-9,20.35-21.58,20.35S358.68,199.64,358.68,186.38Zm41,0c0-12.81-9-18.6-19.45-18.6s-19.44,5.79-19.44,18.6,9,18.6,19.44,18.6S399.71,199.2,399.71,186.38Z"
+         id="path99" />
+      <path
+         fill="url(#O-overlay-1)"
+         d="M358.68,186.38c0-13.26,9-20.34,21.58-20.34s21.58,7.08,21.58,20.34-9,20.35-21.58,20.35S358.68,199.64,358.68,186.38Zm41,0c0-12.81-9-18.6-19.45-18.6s-19.44,5.79-19.44,18.6,9,18.6,19.44,18.6S399.71,199.2,399.71,186.38Z"
+         id="path100" />
+      <path
+         fill="url(#O-overlay-2)"
+         d="M358.68,186.38c0-13.26,9-20.34,21.58-20.34s21.58,7.08,21.58,20.34-9,20.35-21.58,20.35S358.68,199.64,358.68,186.38Zm41,0c0-12.81-9-18.6-19.45-18.6s-19.44,5.79-19.44,18.6,9,18.6,19.44,18.6S399.71,199.2,399.71,186.38Z"
+         id="path101" />
+    </g>
+    <g
+       id="letter-R">
+      <path
+         fill="url(#R-base)"
+         d="M483,206.05l-2.36-8c-1.68-5.56-5.51-8.65-10.39-9.5a21,21,0,0,0-3.55-.22H454.52v17.7h-2V166.71h18.65c6.75,0,12.87,2.53,12.87,10.57,0,5.11-3.31,9.83-10.06,10.68,5.57,1.85,7.82,6.68,8.83,10l2.41,8Zm-12.47-19.39c8.43,0,11.35-4.77,11.35-9.38,0-4.05-2.31-8.83-10.62-8.83H454.52v18.21Z"
+         id="path102" />
+      <path
+         fill="url(#R-overlay-1)"
+         d="M483,206.05l-2.36-8c-1.68-5.56-5.51-8.65-10.39-9.5a21,21,0,0,0-3.55-.22H454.52v17.7h-2V166.71h18.65c6.75,0,12.87,2.53,12.87,10.57,0,5.11-3.31,9.83-10.06,10.68,5.57,1.85,7.82,6.68,8.83,10l2.41,8Zm-12.47-19.39c8.43,0,11.35-4.77,11.35-9.38,0-4.05-2.31-8.83-10.62-8.83H454.52v18.21Z"
+         id="path103" />
+      <path
+         fill="url(#R-overlay-2)"
+         d="M483,206.05l-2.36-8c-1.68-5.56-5.51-8.65-10.39-9.5a21,21,0,0,0-3.55-.22H454.52v17.7h-2V166.71h18.65c6.75,0,12.87,2.53,12.87,10.57,0,5.11-3.31,9.83-10.06,10.68,5.57,1.85,7.82,6.68,8.83,10l2.41,8Zm-12.47-19.39c8.43,0,11.35-4.77,11.35-9.38,0-4.05-2.31-8.83-10.62-8.83H454.52v18.21Z"
+         id="path104" />
+    </g>
+    <g
+       id="letter-K">
+      <path
+         fill="url(#K-base)"
+         d="M565.19,206.05l-13.88-24.39-14.44,14.89v9.5h-2V166.71h2v27.2l26.58-27.2h2.7l-13.27,13.66,14.73,25.68Z"
+         id="path105" />
+      <path
+         fill="url(#K-overlay-1)"
+         d="M565.19,206.05l-13.88-24.39-14.44,14.89v9.5h-2V166.71h2v27.2l26.58-27.2h2.7l-13.27,13.66,14.73,25.68Z"
+         id="path106" />
+      <path
+         fill="url(#K-overlay-2)"
+         d="M565.19,206.05l-13.88-24.39-14.44,14.89v9.5h-2V166.71h2v27.2l26.58-27.2h2.7l-13.27,13.66,14.73,25.68Z"
+         id="path107" />
+    </g>
+  </g>
+  <metadata
+     id="metadata107">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:title>Avian Network</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+</svg>
