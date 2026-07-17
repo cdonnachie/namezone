@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertCircle, Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requestChallenge, resolveOwner, verifyChallenge, ApiError } from "@/lib/client/api";
 import { validateSourceName } from "@/lib/dns/validation";
 import { buildPhotonicConnectUrl } from "@/lib/ownership/radiant/connect-link";
+import {
+  PHOTONIC_CALLBACK_CHANNEL,
+  PHOTONIC_CALLBACK_PATH,
+  extractChallengeNonce,
+  type PhotonicCallbackPayload,
+} from "@/lib/ownership/radiant/photonic-callback";
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -101,11 +107,12 @@ function ManualVerification({
     }
   }
 
-  async function handleVerify() {
+  async function handleVerify(signatureOverride?: string) {
     if (!message) return;
     setLoading("verify");
     try {
-      await verifyChallenge(namespace, address.trim(), message, signature.trim(), { sharedComputer });
+      const sig = (signatureOverride ?? signature).trim();
+      await verifyChallenge(namespace, address.trim(), message, sig, { sharedComputer });
       toast.success("Ownership verified");
       // Full navigation, deliberately not router.push() + router.refresh():
       // refresh() can cancel the in-flight push (seen on mobile, where the
@@ -119,6 +126,25 @@ function ManualVerification({
       setLoading(null);
     }
   }
+
+  // Photonic callback: when the wallet redirects back after signing, the
+  // callback tab broadcasts {nonce, address, signature}. If the nonce matches
+  // our pending challenge, fill the signature and verify - no manual paste.
+  // Older Photonic builds ignore the callback field; the paste flow remains.
+  useEffect(() => {
+    if (namespace !== "radiant" || !message || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(PHOTONIC_CALLBACK_CHANNEL);
+    channel.onmessage = (ev: MessageEvent<PhotonicCallbackPayload>) => {
+      const p = ev.data;
+      if (!p || p.nonce !== extractChallengeNonce(message)) return;
+      setSignature(p.signature);
+      void handleVerify(p.signature);
+    };
+    return () => channel.close();
+    // handleVerify is recreated per render but only reads current state;
+    // re-subscribing on these deps keeps the closure fresh without a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [namespace, message, sharedComputer, address]);
 
   return (
     <div className="space-y-5">
@@ -180,6 +206,7 @@ function ManualVerification({
                     challenge: message,
                     address: address.trim(),
                     origin: window.location.origin,
+                    callback: `${window.location.origin}${PHOTONIC_CALLBACK_PATH}`,
                   })}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -228,7 +255,7 @@ function ManualVerification({
             >
               Back
             </Button>
-            <Button className="flex-1" onClick={handleVerify} disabled={!signature.trim() || loading === "verify"}>
+            <Button className="flex-1" onClick={() => handleVerify()} disabled={!signature.trim() || loading === "verify"}>
               {loading === "verify" && <Loader2 className="size-4 animate-spin" />}
               Verify & Sign In
             </Button>

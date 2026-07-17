@@ -41,4 +41,19 @@ describe("buildPhotonicConnectUrl", () => {
       address: params.address,
     });
   });
+
+  it("carries the callback URL when given", () => {
+    const url = buildPhotonicConnectUrl({
+      ...params,
+      callback: "https://rxd.zone/radiant/photonic-callback",
+    });
+    expect(decodeReqParam(url).callback).toBe("https://rxd.zone/radiant/photonic-callback");
+  });
+
+  it("omits the callback key entirely when absent or blank", () => {
+    expect(decodeReqParam(buildPhotonicConnectUrl(params))).not.toHaveProperty("callback");
+    expect(decodeReqParam(buildPhotonicConnectUrl({ ...params, callback: "" }))).not.toHaveProperty(
+      "callback",
+    );
+  });
 });

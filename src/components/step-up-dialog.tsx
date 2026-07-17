@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AlertCircle, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, requestChallenge, stepUp } from "@/lib/client/api";
 import { buildPhotonicConnectUrl } from "@/lib/ownership/radiant/connect-link";
+import {
+  PHOTONIC_CALLBACK_CHANNEL,
+  PHOTONIC_CALLBACK_PATH,
+  extractChallengeNonce,
+  type PhotonicCallbackPayload,
+} from "@/lib/ownership/radiant/photonic-callback";
 
 /**
  * "Confirm with your wallet" step-up dialog. Runs the same challenge/sign
@@ -63,11 +69,11 @@ export function StepUpDialog({
     }
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(signatureOverride?: string) {
     if (!message) return;
     setLoading("confirm");
     try {
-      await stepUp(namespace, address, message, signature.trim());
+      await stepUp(namespace, address, message, (signatureOverride ?? signature).trim());
       toast.success("Confirmed");
       onOpenChange(false);
       reset();
@@ -78,6 +84,22 @@ export function StepUpDialog({
       setLoading(null);
     }
   }
+
+  // Photonic callback: auto-confirm when the callback tab broadcasts a
+  // signature for our pending challenge (see connect-flow.tsx for the
+  // matching sign-in listener; manual paste remains the fallback).
+  useEffect(() => {
+    if (namespace !== "radiant" || !open || !message || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(PHOTONIC_CALLBACK_CHANNEL);
+    channel.onmessage = (ev: MessageEvent<PhotonicCallbackPayload>) => {
+      const p = ev.data;
+      if (!p || p.nonce !== extractChallengeNonce(message)) return;
+      setSignature(p.signature);
+      void handleConfirm(p.signature);
+    };
+    return () => channel.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [namespace, open, message, address]);
 
   return (
     <Dialog
@@ -121,6 +143,7 @@ export function StepUpDialog({
                       challenge: message,
                       address,
                       origin: window.location.origin,
+                      callback: `${window.location.origin}${PHOTONIC_CALLBACK_PATH}`,
                     })}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -147,7 +170,7 @@ export function StepUpDialog({
           {message && (
             <Button
               className="w-full"
-              onClick={handleConfirm}
+              onClick={() => handleConfirm()}
               disabled={!signature.trim() || loading === "confirm"}
             >
               {loading === "confirm" && <Loader2 className="size-4 animate-spin" />}
