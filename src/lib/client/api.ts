@@ -154,6 +154,85 @@ export function deleteAcmeChallenge(namespace: string, name: string, data: { hos
   });
 }
 
+export type RedirectStatusCode = 301 | 302 | 307 | 308;
+
+export interface UrlRedirectDto {
+  id: string;
+  claimedName: string;
+  fqdn: string;
+  relativeHost: string;
+  destinationUrl: string;
+  statusCode: RedirectStatusCode;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// The API routes return the raw row (status ACTIVE/DISABLED); normalize it to
+// the client DTO's `enabled` boolean and drop server-only fields.
+interface RawRedirectRow {
+  id: string;
+  claimedName: string;
+  fqdn: string;
+  relativeHost: string;
+  destinationUrl: string;
+  statusCode: number;
+  status: "ACTIVE" | "DISABLED";
+  createdAt: string;
+  updatedAt: string;
+}
+function toRedirectDto(r: RawRedirectRow): UrlRedirectDto {
+  return {
+    id: r.id,
+    claimedName: r.claimedName,
+    fqdn: r.fqdn,
+    relativeHost: r.relativeHost,
+    destinationUrl: r.destinationUrl,
+    statusCode: r.statusCode as RedirectStatusCode,
+    enabled: r.status === "ACTIVE",
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+export async function fetchRedirects(namespace: string, name: string): Promise<UrlRedirectDto[]> {
+  const { redirects } = await request<{ redirects: RawRedirectRow[] }>(
+    `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects`,
+  );
+  return redirects.map(toRedirectDto);
+}
+
+export async function createRedirect(
+  namespace: string,
+  name: string,
+  data: { hostname: string; destinationUrl: string; statusCode?: RedirectStatusCode },
+): Promise<UrlRedirectDto> {
+  const { redirect } = await request<{ redirect: RawRedirectRow }>(
+    `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects`,
+    { method: "POST", body: JSON.stringify(data) },
+  );
+  return toRedirectDto(redirect);
+}
+
+export async function updateRedirect(
+  namespace: string,
+  name: string,
+  id: string,
+  data: { destinationUrl?: string; statusCode?: RedirectStatusCode; enabled?: boolean },
+): Promise<UrlRedirectDto> {
+  const { redirect } = await request<{ redirect: RawRedirectRow }>(
+    `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects/${id}`,
+    { method: "PATCH", body: JSON.stringify(data) },
+  );
+  return toRedirectDto(redirect);
+}
+
+export function deleteRedirect(namespace: string, name: string, id: string) {
+  return request<{ ok: true }>(`/api/${namespace}/dns/${encodeURIComponent(name)}/redirects/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export interface AuditLogDto {
   id: string;
   claimedName: string;

@@ -41,6 +41,31 @@ export const deleteRecordSchema = z.object({
   value: z.string().trim().min(1).max(1024).optional(),
 });
 
+// URL redirects. Allowlisted status codes only; the rest of the destination
+// URL / hostname validation happens in src/lib/redirect/validation.ts.
+export const redirectStatusCodeSchema = z.union([
+  z.literal(301),
+  z.literal(302),
+  z.literal(307),
+  z.literal(308),
+]);
+
+export const createRedirectSchema = z.object({
+  hostname: z.string().trim().min(1).max(253),
+  destinationUrl: z.string().trim().min(1).max(2048),
+  statusCode: redirectStatusCodeSchema.optional(),
+});
+
+export const updateRedirectSchema = z
+  .object({
+    destinationUrl: z.string().trim().min(1).max(2048).optional(),
+    statusCode: redirectStatusCodeSchema.optional(),
+    enabled: z.boolean().optional(),
+  })
+  .refine((b) => b.destinationUrl !== undefined || b.statusCode !== undefined || b.enabled !== undefined, {
+    message: "No changes provided.",
+  });
+
 // ACME challenge records: `hostname` is the target service host (e.g. "@",
 // "www"), not the "_acme-challenge" name itself - the API derives that.
 export const createAcmeChallengeSchema = z.object({

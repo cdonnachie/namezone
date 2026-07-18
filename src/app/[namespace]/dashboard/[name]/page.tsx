@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { reconcileClaimedNameRecordsWithPowerDns } from "@/lib/dns/reconcile";
 import { isEmailEnabledName } from "@/lib/dns/email";
 import { sourceNameToBaseFqdn } from "@/lib/dns/validation";
+import { isRedirectFeatureEnabled } from "@/lib/redirect/constants";
 import { getNamespace } from "@/lib/namespaces";
 import { DnsManager } from "./dns-manager";
 
@@ -80,7 +81,12 @@ export default async function DnsManagementPage({
   await reconcileClaimedNameRecordsWithPowerDns(ns, [auth.name]);
 
   const records = await prisma.dnsRecord.findMany({
-    where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE" },
+    where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", isManagedRedirect: false },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const redirects = await prisma.urlRedirect.findMany({
+    where: { namespace: ns.key, claimedName: auth.name },
     orderBy: { createdAt: "asc" },
   });
 
@@ -110,6 +116,7 @@ export default async function DnsManagementPage({
         name={auth.name}
         zone={sourceNameToBaseFqdn(auth.name, ns)}
         emailEnabled={isEmailEnabledName(auth.name)}
+        redirectEnabled={isRedirectFeatureEnabled(ns.key)}
         initialRecords={records.map((r) => ({
           id: r.id,
           claimedName: r.claimedName,
@@ -120,6 +127,17 @@ export default async function DnsManagementPage({
           ttl: r.ttl,
           isAcmeChallenge: r.isAcmeChallenge,
           expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+        }))}
+        initialRedirects={redirects.map((r) => ({
+          id: r.id,
+          claimedName: r.claimedName,
+          fqdn: r.fqdn,
+          relativeHost: r.relativeHost,
+          destinationUrl: r.destinationUrl,
+          statusCode: r.statusCode as 301 | 302 | 307 | 308,
+          enabled: r.status === "ACTIVE",
           createdAt: r.createdAt.toISOString(),
           updatedAt: r.updatedAt.toISOString(),
         }))}

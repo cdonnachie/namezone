@@ -43,6 +43,7 @@ import { getNamespace, type NamespaceConfig } from "@/lib/namespaces";
 import { requireClaimedNameOwnership } from "@/lib/ownership/sync";
 import { getPowerDnsClient } from "@/lib/powerdns/client";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { hasManagedRedirectAt } from "@/lib/redirect/service";
 
 async function buildCnameResolver(namespace: NamespaceConfig): Promise<(name: string) => string | undefined> {
   const allCnames = await prisma.dnsRecord.findMany({
@@ -122,6 +123,15 @@ export async function POST(
     const authFqdn = authorizeFqdnForName(fqdn, auth.name, ns);
     if (!authFqdn.ok) {
       return NextResponse.json({ error: authFqdn.error }, { status: 403 });
+    }
+
+    // A managed URL redirect owns this hostname exclusively (its A/AAAA point at
+    // the redirect service); a normal record here would conflict.
+    if (await hasManagedRedirectAt(ns.key, fqdn)) {
+      return NextResponse.json(
+        { error: "A URL redirect already exists at this hostname. Delete it before adding a record here." },
+        { status: 409 },
+      );
     }
 
     // Validate the value per type and produce the exact string stored in both

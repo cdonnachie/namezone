@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   BookOpen,
   Check,
   Copy,
+  ExternalLink,
   Globe,
   History,
   Loader2,
   Lock,
   Plus,
+  Power,
   Radar,
   Server,
   ShieldCheck,
@@ -70,14 +73,19 @@ import {
   ApiError,
   createAcmeChallenge,
   createOrUpdateRecord,
+  createRedirect,
   deleteAcmeChallenge,
   deleteRecord,
+  deleteRedirect,
   fetchAuditLogs,
+  updateRedirect,
   verifyAllRecordsPropagation,
   verifyRecordPropagation,
   type AuditLogDto,
   type EditableRecordType,
   type DnsRecordDto,
+  type RedirectStatusCode,
+  type UrlRedirectDto,
 } from "@/lib/client/api";
 import {
   isAcmeChallengeHost,
@@ -86,6 +94,12 @@ import {
   validateRecordValue,
   validateRelativeHost,
 } from "@/lib/dns/validation";
+import { validateDestinationUrl } from "@/lib/redirect/validation";
+import {
+  DEFAULT_REDIRECT_STATUS,
+  REDIRECT_STATUS_CODES,
+  isPermanentRedirect,
+} from "@/lib/redirect/constants";
 import { validateEmailTxtValue, validateMxValue } from "@/lib/dns/email";
 import {
   ACME_TXT_DEFAULT_EXPIRY_HOURS,
@@ -576,14 +590,18 @@ export function DnsManager({
   name,
   zone,
   emailEnabled,
+  redirectEnabled,
   initialRecords,
+  initialRedirects,
 }: {
   namespace: string;
   address: string;
   name: string;
   zone: string;
   emailEnabled: boolean;
+  redirectEnabled: boolean;
   initialRecords: DnsRecordDto[];
+  initialRedirects: UrlRedirectDto[];
 }) {
   return (
     <StepUpProvider namespace={namespace} address={address}>
@@ -592,7 +610,9 @@ export function DnsManager({
         name={name}
         zone={zone}
         emailEnabled={emailEnabled}
+        redirectEnabled={redirectEnabled}
         initialRecords={initialRecords}
+        initialRedirects={initialRedirects}
       />
     </StepUpProvider>
   );
@@ -603,13 +623,17 @@ function DnsManagerInner({
   name,
   zone,
   emailEnabled,
+  redirectEnabled,
   initialRecords,
+  initialRedirects,
 }: {
   namespace: string;
   name: string;
   zone: string;
   emailEnabled: boolean;
+  redirectEnabled: boolean;
   initialRecords: DnsRecordDto[];
+  initialRedirects: UrlRedirectDto[];
 }) {
   const runWithStepUp = useStepUp();
   // `zone` is the absolute FQDN (trailing dot) used internally; show and copy
@@ -1033,6 +1057,15 @@ function DnsManagerInner({
         </CardContent>
       </Card>
 
+      {redirectEnabled && (
+        <RedirectSection
+          namespace={namespace}
+          name={name}
+          zone={zone}
+          initialRedirects={initialRedirects}
+        />
+      )}
+
       <RecentChanges namespace={namespace} name={name} refreshToken={records} />
 
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
@@ -1085,6 +1118,391 @@ function DnsManagerInner({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function redirectStatusLabel(code: RedirectStatusCode): string {
+  switch (code) {
+    case 301:
+      return "Permanent";
+    case 302:
+      return "Temporary";
+    case 307:
+      return "Temporary (strict)";
+    case 308:
+      return "Permanent (strict)";
+  }
+}
+
+/**
+ * Managed URL redirects for a name. A dedicated section (like the ACME table)
+ * rather than a raw record type: a redirect carries a destination URL + status
+ * code, not a DNS value, and the DNS side is provisioned automatically.
+ */
+function RedirectSection({
+  namespace,
+  name,
+  zone,
+  initialRedirects,
+}: {
+  namespace: string;
+  name: string;
+  zone: string;
+  initialRedirects: UrlRedirectDto[];
+}) {
+  const runWithStepUp = useStepUp();
+  const displayZone = zone.replace(/\.$/, "");
+  const [redirects, setRedirects] = useState<UrlRedirectDto[]>(initialRedirects);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<UrlRedirectDto | null>(null);
+  const [deleting, setDeleting] = useState<UrlRedirectDto | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  function upsertLocal(r: UrlRedirectDto) {
+    setRedirects((prev) => {
+      const idx = prev.findIndex((x) => x.id === r.id);
+      if (idx === -1) return [...prev, r];
+      const next = [...prev];
+      next[idx] = r;
+      return next;
+    });
+  }
+
+  const sourceUrl = (r: UrlRedirectDto) => `https://${r.fqdn.replace(/\.$/, "")}`;
+  const sourceLabel = (relativeHost: string) =>
+    relativeHost === "@" ? displayZone : `${relativeHost}.${displayZone}`;
+
+  async function toggle(r: UrlRedirectDto) {
+    setTogglingId(r.id);
+    try {
+      const updated = await runWithStepUp(() => updateRedirect(namespace, name, r.id, { enabled: !r.enabled }));
+      upsertLocal(updated);
+      toast.success(updated.enabled ? "Redirect enabled" : "Redirect disabled");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update redirect.");
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            URL redirects
+            <InfoTooltip>
+              A managed redirect sends visitors from a hostname under {displayZone} to any URL you
+              choose, with automatic HTTPS - no DNS or server setup needed.
+            </InfoTooltip>
+          </CardTitle>
+          <CardDescription className="mt-1.5">
+            e.g. <span className="font-mono">x.{displayZone}</span> &rarr;{" "}
+            <span className="font-mono">https://x.com/you</span>. HTTPS is provisioned on first
+            visit and can take a short moment.
+          </CardDescription>
+        </div>
+        <Dialog
+          open={addOpen}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) setEditing(null);
+          }}
+        >
+          <DialogTrigger asChild>
+            <Button size="sm" className="sm:shrink-0" onClick={() => setEditing(null)}>
+              <Plus className="size-4" /> Add redirect
+            </Button>
+          </DialogTrigger>
+          <RedirectDialogContent
+            key={editing?.id ?? "new"}
+            namespace={namespace}
+            name={name}
+            displayZone={displayZone}
+            existing={editing}
+            onSaved={(r) => {
+              upsertLocal(r);
+              setAddOpen(false);
+              setEditing(null);
+            }}
+          />
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {redirects.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No redirects yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Source</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {redirects.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="max-w-55 truncate lg:max-w-80" title={sourceUrl(r)}>
+                        {sourceLabel(r.relativeHost)}
+                      </span>
+                      <CopyInline value={sourceUrl(r)} />
+                      <a href={sourceUrl(r)} target="_blank" rel="noreferrer" title="Open source URL">
+                        <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
+                      </a>
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-mono">
+                    <span className="flex items-center gap-1.5">
+                      <span className="max-w-55 truncate lg:max-w-80" title={r.destinationUrl}>
+                        {r.destinationUrl}
+                      </span>
+                      <a
+                        href={r.destinationUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open destination URL"
+                      >
+                        <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
+                      </a>
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1">
+                      <Badge variant="outline">{r.statusCode}</Badge>
+                      {isPermanentRedirect(r.statusCode) && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertTriangle className="size-3.5 text-amber-500" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Permanent redirects are cached by browsers and search engines and can be
+                            hard to change later.
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={r.enabled ? "default" : "outline"}>
+                      {r.enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(r);
+                        setAddOpen(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggle(r)}
+                      disabled={togglingId === r.id}
+                      title={r.enabled ? "Disable" : "Enable"}
+                    >
+                      {togglingId === r.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Power className="size-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(r)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete redirect?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the redirect for{" "}
+              <span className="font-mono">{deleting ? sourceLabel(deleting.relativeHost) : ""}</span>{" "}
+              and its managed DNS records. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deleting) return;
+                const target = deleting;
+                try {
+                  await runWithStepUp(() => deleteRedirect(namespace, name, target.id));
+                  setRedirects((prev) => prev.filter((x) => x.id !== target.id));
+                  toast.success("Redirect deleted");
+                } catch (err) {
+                  toast.error(err instanceof ApiError ? err.message : "Failed to delete redirect.");
+                } finally {
+                  setDeleting(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function RedirectDialogContent({
+  namespace,
+  name,
+  displayZone,
+  existing,
+  onSaved,
+}: {
+  namespace: string;
+  name: string;
+  displayZone: string;
+  existing: UrlRedirectDto | null;
+  onSaved: (r: UrlRedirectDto) => void;
+}) {
+  const runWithStepUp = useStepUp();
+  const isEdit = existing !== null;
+  const [hostname, setHostname] = useState(existing?.relativeHost ?? "");
+  const [destinationUrl, setDestinationUrl] = useState(existing?.destinationUrl ?? "");
+  const [statusCode, setStatusCode] = useState<RedirectStatusCode>(existing?.statusCode ?? DEFAULT_REDIRECT_STATUS);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const previewSource = useMemo(() => {
+    if (isEdit && existing) return `https://${existing.fqdn.replace(/\.$/, "")}`;
+    const host = hostname.trim().toLowerCase();
+    if (!host || host === "@") return `https://${displayZone}`;
+    return `https://${host}.${displayZone}`;
+  }, [hostname, isEdit, existing, displayZone]);
+
+  async function handleSave() {
+    setError(null);
+    if (!isEdit) {
+      const hostResult = validateRelativeHost(hostname);
+      if (!hostResult.ok) {
+        setError(hostResult.error);
+        return;
+      }
+    }
+    const destResult = validateDestinationUrl(destinationUrl);
+    if (!destResult.ok) {
+      setError(destResult.error);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const saved =
+        isEdit && existing
+          ? await runWithStepUp(() =>
+              updateRedirect(namespace, name, existing.id, { destinationUrl: destResult.value, statusCode }),
+            )
+          : await runWithStepUp(() =>
+              createRedirect(namespace, name, { hostname, destinationUrl: destResult.value, statusCode }),
+            );
+      onSaved(saved);
+      toast.success(isEdit ? "Redirect updated" : "Redirect created", {
+        description: "DNS and HTTPS activation may take a short moment.",
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save redirect.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{isEdit ? "Edit redirect" : "Add URL redirect"}</DialogTitle>
+        <DialogDescription>
+          Send a hostname under {displayZone} to any http(s) URL. HTTPS is handled automatically.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="redirect-host">Host</Label>
+          <Input
+            id="redirect-host"
+            value={hostname}
+            onChange={(e) => setHostname(e.target.value)}
+            placeholder="x, @, links"
+            disabled={isEdit}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="redirect-dest">Destination URL</Label>
+          <Input
+            id="redirect-dest"
+            value={destinationUrl}
+            onChange={(e) => setDestinationUrl(e.target.value)}
+            placeholder="https://x.com/you"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="redirect-status">Redirect type</Label>
+          <Select value={String(statusCode)} onValueChange={(v) => setStatusCode(Number(v) as RedirectStatusCode)}>
+            <SelectTrigger id="redirect-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REDIRECT_STATUS_CODES.map((code) => (
+                <SelectItem key={code} value={String(code)}>
+                  {code} {redirectStatusLabel(code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {isPermanentRedirect(statusCode) && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-3.5 shrink-0" />
+              Browsers and search engines may cache permanent redirects for a long time.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-md border bg-muted/40 p-2.5 text-xs">
+          <span className="text-muted-foreground">Result: </span>
+          <span className="font-mono break-all">{previewSource}</span>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+
+      <DialogFooter>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          {isEdit ? "Save changes" : "Create redirect"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }
 

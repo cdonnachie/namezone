@@ -55,7 +55,8 @@ model ClaimedName {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
-  records DnsRecord[]
+  records   DnsRecord[]
+  redirects UrlRedirect[]
 
   @@unique([namespace, name])
   @@index([namespace, ownerAddress])
@@ -98,6 +99,11 @@ model DnsRecord {
   // Set only for ACME TXT records; they are auto-deleted after this time
   // (enforced lazily on read - see src/lib/dns/reconcile.ts).
   expiresAt        DateTime?
+  // True for the A/AAAA rows the URL-redirect feature writes to point a
+  // redirect hostname at the redirect service. They are hidden from the raw
+  // record table (surfaced as "URL Redirect" pseudo-records instead) and are
+  // only deleted/replaced through the redirect flow - see src/lib/redirect/.
+  isManagedRedirect Boolean                 @default(false)
   powerdnsRecordId String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -105,6 +111,33 @@ model DnsRecord {
   @@unique([namespace, fqdn, type, value])
   @@index([namespace, claimedName])
   @@index([expiresAt])
+  @@index([status])
+}
+
+// A managed URL redirect below a claimed name, e.g. "x.bob.rxd.zone" ->
+// "https://x.com/bob". Behaves like a pseudo-DNS record in the UI. The DNS
+// side (A/AAAA to the redirect service) is stored as ordinary DnsRecord rows
+// flagged isManagedRedirect; this row holds the redirect metadata the
+// redirect service and the Caddy on-demand-TLS authorize endpoint read.
+// Reuses DnsRecordStatus/DnsRecordDisabledReason so an ownership transfer
+// disables redirects through the same disableClaimedNameRecords path.
+model UrlRedirect {
+  id             String                   @id @default(cuid())
+  namespace      String                   // "avian" | "radiant" | ...
+  claimedName    String                   // e.g. "bob.rxd" - matches ClaimedName.name within namespace
+  claimedNameRef ClaimedName              @relation(fields: [namespace, claimedName], references: [namespace, name], onDelete: Cascade)
+  fqdn           String                   // "x.bob.rxd.zone." (absolute, trailing dot)
+  relativeHost   String                   // "x" or "@" for the name apex
+  destinationUrl String
+  statusCode     Int                      @default(302) // 301 | 302 | 307 | 308 (allowlist enforced in code)
+  status         DnsRecordStatus          @default(ACTIVE)
+  disabledReason DnsRecordDisabledReason?
+  createdByWallet String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([namespace, fqdn])
+  @@index([namespace, claimedName])
   @@index([status])
 }
 

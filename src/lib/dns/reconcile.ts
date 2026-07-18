@@ -22,6 +22,17 @@ export async function disableClaimedNameRecords(
   name: string,
   previousOwnerAddress: string,
 ): Promise<void> {
+  // Disable managed URL redirects in lockstep. Their underlying A/AAAA rows are
+  // ordinary DnsRecords handled by the loop below (removed from PowerDNS +
+  // marked DISABLED); this flips the redirect metadata the redirect service and
+  // TLS-authorize endpoint read, so the previous owner's redirects stop
+  // resolving immediately. Done before the early return so a name with
+  // redirects but no other records is still disabled.
+  await prisma.urlRedirect.updateMany({
+    where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
+    data: { status: "DISABLED", disabledReason: "OWNERSHIP_CHANGED" },
+  });
+
   const records = await prisma.dnsRecord.findMany({
     where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
   });

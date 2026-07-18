@@ -27,8 +27,10 @@ export async function GET(
 
     await reconcileClaimedNameRecordsWithPowerDns(ns, [auth.name]);
 
+    // Managed-redirect A/AAAA rows are surfaced as "URL Redirect"
+    // pseudo-records via the redirects endpoint, not as raw records here.
     const records = await prisma.dnsRecord.findMany({
-      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE" },
+      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", isManagedRedirect: false },
       orderBy: { createdAt: "asc" },
     });
 
