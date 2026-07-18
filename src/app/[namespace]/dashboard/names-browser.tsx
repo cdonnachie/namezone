@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Globe, LayoutGrid, List, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,26 @@ export interface NameSummaryDto {
   transferJustDetected: boolean;
 }
 
-const VIEW_STORAGE_KEY = "namezone_names_view";
+/**
+ * Cookie (not localStorage) so the server can render the chosen view on the
+ * first paint - localStorage is only readable after hydration, which made
+ * list view flash the card grid on every refresh. The dashboard page reads
+ * this and passes `initialView`.
+ *
+ * The __Host- prefix is enforced by the browser: the cookie must be Secure,
+ * Path=/, and carry no Domain, which pins it to this exact host. That's the
+ * rule the help page (/help#security) tells subdomain owners to follow, and
+ * it matters more here than for a session cookie's usual reasons: moving off
+ * localStorage (which is already host-isolated) into a cookie would
+ * otherwise let another rxd.zone/avn.zone subdomain plant a
+ * Domain=<zone> lookalike that shadows this one at the apex, since the zones
+ * aren't on the PSL yet. Not HttpOnly - client JS sets it on toggle - which
+ * is fine: it's a non-sensitive UI preference, not a credential.
+ */
+export const NAMES_VIEW_COOKIE = "__Host-namezone_names_view";
+
+/** Pre-cookie localStorage key; migrated once below, then ignored. */
+const LEGACY_VIEW_STORAGE_KEY = "namezone_names_view";
 
 /** Show the search/view controls only once a wallet has enough names to need them. */
 const CONTROLS_THRESHOLD = 6;
@@ -28,17 +47,40 @@ const CONTROLS_THRESHOLD = 6;
  * search plus a card/list view toggle (remembered per browser). Wallets can
  * hold hundreds of Wave names, where a plain card grid stops working.
  */
-export function NamesBrowser({ namespace, names }: { namespace: string; names: NameSummaryDto[] }) {
+export function NamesBrowser({
+  namespace,
+  names,
+  initialView,
+}: {
+  namespace: string;
+  names: NameSummaryDto[];
+  initialView: "cards" | "list";
+}) {
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"cards" | "list">(() => {
-    if (typeof window === "undefined") return "cards";
-    return localStorage.getItem(VIEW_STORAGE_KEY) === "list" ? "list" : "cards";
-  });
+  const [view, setView] = useState<"cards" | "list">(initialView);
 
   function changeView(next: "cards" | "list") {
     setView(next);
-    localStorage.setItem(VIEW_STORAGE_KEY, next);
+    // __Host- requires Secure + Path=/ + no Domain (see NAMES_VIEW_COOKIE).
+    // localhost counts as a secure context, so Secure works in dev too.
+    document.cookie = `${NAMES_VIEW_COOKIE}=${next}; Path=/; Max-Age=31536000; Secure; SameSite=Lax`;
   }
+
+  // One-time migration for browsers that saved the preference in
+  // localStorage before it moved to the cookie: adopt it (one final flash),
+  // then the cookie takes over and the legacy key is cleared. localStorage
+  // is only knowable after mount, so the post-mount set is unavoidable here
+  // - same pattern as the hash-driven tab in help-tabs.tsx.
+  useEffect(() => {
+    const legacy = localStorage.getItem(LEGACY_VIEW_STORAGE_KEY);
+    if (legacy === null) return;
+    localStorage.removeItem(LEGACY_VIEW_STORAGE_KEY);
+    if (legacy === "list" && initialView === "cards") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      changeView("list");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sorted = [...names].sort((a, b) => a.name.localeCompare(b.name));
   const q = query.trim().toLowerCase();
