@@ -1,0 +1,36 @@
+# systemd unit for the Name Zone Next.js app (`next start`).
+# Install to /etc/systemd/system/namezone.service, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now namezone
+# Caddy runs as its own service (the caddy.service shipped by the Caddy package,
+# pointed at deploy/Caddyfile).
+
+[Unit]
+Description=Name Zone (Next.js DNS gateway + URL redirects)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=namezone
+Group=namezone
+WorkingDirectory=/opt/namezone
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Secrets and config (DATABASE_URL, POWERDNS_*, REDIRECT_SERVICE_IPV4, etc.).
+EnvironmentFile=/opt/namezone/.env
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+# Readiness/liveness are exposed at /api/ready and /api/health.
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Writable paths the app needs (SQLite DB + backups live under data/).
+ReadWritePaths=/opt/namezone/data
+
+[Install]
+WantedBy=multi-user.target

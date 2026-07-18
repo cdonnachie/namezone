@@ -1,0 +1,47 @@
+# Caddy front end for Name Zone + managed URL redirects.
+#
+# Terminates TLS and reverse-proxies to the Next.js app on 127.0.0.1:3000
+# (`next start`). Redirect hostnames such as x.craigd.rxd.zone are too deep for
+# a single *.rxd.zone wildcard, so their certificates are issued ON DEMAND,
+# gated by the app's authorize endpoint - Caddy asks before every issuance and
+# only proceeds on HTTP 200, so a stranger hitting random.<zone> can never make
+# Caddy mint a cert for an unconfigured host.
+#
+# Replace the {$...} placeholders (or set them in Caddy's environment).
+
+{
+	# Ask the app before issuing any on-demand certificate. Runs on localhost;
+	# if the app isn't co-located, point this at the trusted internal address
+	# and set REDIRECT_TLS_AUTH_SECRET (see below).
+	on_demand_tls {
+		ask http://127.0.0.1:3000/api/internal/tls/authorize
+	}
+	# email {$ACME_EMAIL}
+}
+
+# --- Management app -------------------------------------------------------
+# The operator's own domains (bare zones + any primary app host). Normal
+# (non-on-demand) certificates. Add every hostname the management UI serves on.
+{$MANAGEMENT_HOSTS:rxd.zone, avn.zone} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+# --- Managed URL redirects ------------------------------------------------
+# Catch-all for every other HTTPS host (the redirect subdomains). Certificates
+# are issued on demand and gated by the `ask` endpoint above. The app's
+# middleware routes these to the redirect service by Host header.
+#
+# If the authorize endpoint cannot be network-isolated from the internet, set
+# REDIRECT_TLS_AUTH_SECRET in the app and send it here, e.g.:
+#   reverse_proxy 127.0.0.1:3000 {
+#       header_up Authorization "Bearer {$REDIRECT_TLS_AUTH_SECRET}"
+#   }
+# (and point `ask` at the same secret-protected endpoint).
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
