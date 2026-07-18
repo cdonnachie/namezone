@@ -15,13 +15,10 @@ import {
 } from "@/lib/redirect/constants";
 import {
   hasNonRedirectRecordAt,
+  redirectWouldLoop,
   writeRedirectDnsRecords,
 } from "@/lib/redirect/service";
-import {
-  validateDestinationUrl,
-  validateRedirectHost,
-  wouldRedirectLoop,
-} from "@/lib/redirect/validation";
+import { validateDestinationUrl, validateRedirectHost } from "@/lib/redirect/validation";
 
 export async function GET(
   req: Request,
@@ -102,15 +99,7 @@ export async function POST(
     const destinationUrl = destResult.value;
     const statusCode = body.statusCode ?? DEFAULT_REDIRECT_STATUS;
 
-    // Loop detection over all enabled redirects in this namespace, with the new
-    // destination substituted at this fqdn so chains through it are seen.
-    const activeRedirects = await prisma.urlRedirect.findMany({
-      where: { namespace: ns.key, status: "ACTIVE" },
-      select: { fqdn: true, destinationUrl: true },
-    });
-    const destByFqdn = new Map(activeRedirects.map((r) => [r.fqdn, r.destinationUrl]));
-    destByFqdn.set(fqdn, destinationUrl);
-    if (wouldRedirectLoop(fqdn, destinationUrl, (f) => destByFqdn.get(f))) {
+    if (await redirectWouldLoop(ns.key, fqdn, destinationUrl)) {
       return NextResponse.json(
         { error: "This redirect points back to itself (a redirect loop)." },
         { status: 400 },
@@ -134,10 +123,13 @@ export async function POST(
       return NextResponse.json({ error: "A redirect already exists for this hostname." }, { status: 409 });
     }
 
+    // Enforce the cap on any row that will become ACTIVE - including reactivating
+    // a DISABLED row (an ACTIVE duplicate already 409'd above, so `existing` here
+    // is null or DISABLED and either way adds one to the active count).
     const activeCount = await prisma.urlRedirect.count({
       where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE" },
     });
-    if (!existing && activeCount >= MAX_REDIRECTS_PER_NAME) {
+    if (activeCount >= MAX_REDIRECTS_PER_NAME) {
       return NextResponse.json(
         { error: `Maximum of ${MAX_REDIRECTS_PER_NAME} redirects per name reached.` },
         { status: 400 },

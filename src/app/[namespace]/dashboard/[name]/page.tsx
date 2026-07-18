@@ -11,6 +11,7 @@ import { reconcileClaimedNameRecordsWithPowerDns } from "@/lib/dns/reconcile";
 import { isEmailEnabledName } from "@/lib/dns/email";
 import { sourceNameToBaseFqdn } from "@/lib/dns/validation";
 import { isRedirectFeatureEnabled } from "@/lib/redirect/constants";
+import { toUrlRedirectDto } from "@/lib/redirect/dto";
 import { getNamespace } from "@/lib/namespaces";
 import { DnsManager } from "./dns-manager";
 
@@ -130,17 +131,7 @@ export default async function DnsManagementPage({
           createdAt: r.createdAt.toISOString(),
           updatedAt: r.updatedAt.toISOString(),
         }))}
-        initialRedirects={redirects.map((r) => ({
-          id: r.id,
-          claimedName: r.claimedName,
-          fqdn: r.fqdn,
-          relativeHost: r.relativeHost,
-          destinationUrl: r.destinationUrl,
-          statusCode: r.statusCode as 301 | 302 | 307 | 308,
-          enabled: r.status === "ACTIVE",
-          createdAt: r.createdAt.toISOString(),
-          updatedAt: r.updatedAt.toISOString(),
-        }))}
+        initialRedirects={redirects.map(toUrlRedirectDto)}
       />
     </div>
   );

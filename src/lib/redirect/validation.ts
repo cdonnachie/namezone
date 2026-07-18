@@ -70,6 +70,10 @@ export function isBlockedDestinationHost(rawHost: string): boolean {
   let host = rawHost.trim().toLowerCase();
   if (host.length === 0) return true;
   if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1); // IPv6 brackets
+  // Strip a trailing dot (WHATWG URL keeps it on named hosts): "localhost." and
+  // "127.0.0.1." resolve to loopback just the same, so they must not slip past
+  // the exact-match / IP checks below.
+  if (host.endsWith(".") && host !== ".") host = host.slice(0, -1);
   if (host === "localhost" || host.endsWith(".localhost")) return true;
   if (isValidIPv4(host)) return isBlockedIPv4(host);
   if (isValidIPv6(host)) return isBlockedIPv6(host);
@@ -173,7 +177,11 @@ export function wouldRedirectLoop(
   const seen = new Set<string>([source.endsWith(".") ? source : `${source}.`]);
   let currentUrl = destinationUrl;
 
-  for (let hop = 0; hop < MAX_REDIRECT_CHAIN_HOPS; hop++) {
+  // <= so a chain of exactly MAX_REDIRECT_CHAIN_HOPS managed redirects that
+  // terminates externally gets the one extra iteration needed to see the
+  // external terminus (resolve -> undefined -> not a loop), rather than being
+  // falsely rejected at the boundary.
+  for (let hop = 0; hop <= MAX_REDIRECT_CHAIN_HOPS; hop++) {
     const fqdn = destinationToFqdn(currentUrl);
     if (!fqdn) return false; // unparseable/external → chain ends, no loop
     if (seen.has(fqdn)) return true; // back to source or an earlier hop

@@ -11,10 +11,11 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { isRedirectFeatureEnabled } from "@/lib/redirect/constants";
 import {
   hasNonRedirectRecordAt,
+  redirectWouldLoop,
   removeRedirectDnsRecords,
   writeRedirectDnsRecords,
 } from "@/lib/redirect/service";
-import { validateDestinationUrl, wouldRedirectLoop } from "@/lib/redirect/validation";
+import { validateDestinationUrl } from "@/lib/redirect/validation";
 
 type RouteParams = { params: Promise<{ namespace: string; name: string; id: string }> };
 
@@ -77,22 +78,22 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         return NextResponse.json({ error: destResult.error }, { status: 400 });
       }
       destinationUrl = destResult.value;
-
-      const activeRedirects = await prisma.urlRedirect.findMany({
-        where: { namespace: ns.key, status: "ACTIVE" },
-        select: { fqdn: true, destinationUrl: true },
-      });
-      const destByFqdn = new Map(activeRedirects.map((r) => [r.fqdn, r.destinationUrl]));
-      destByFqdn.set(redirect.fqdn, destinationUrl);
-      if (wouldRedirectLoop(redirect.fqdn, destinationUrl, (f) => destByFqdn.get(f))) {
-        return NextResponse.json(
-          { error: "This redirect points back to itself (a redirect loop)." },
-          { status: 400 },
-        );
-      }
     }
 
     const statusCode = body.statusCode ?? redirect.statusCode;
+
+    // Re-check for loops whenever the redirect will END UP active - not only when
+    // the destination changes. Re-enabling a redirect must re-validate too, since
+    // another redirect forming a loop with it may have been created while it was
+    // disabled (and therefore invisible to that create's loop check).
+    const willBeActive = body.enabled === undefined ? redirect.status === "ACTIVE" : body.enabled;
+    if (willBeActive && (await redirectWouldLoop(ns.key, redirect.fqdn, destinationUrl))) {
+      return NextResponse.json(
+        { error: "This redirect points back to itself (a redirect loop)." },
+        { status: 400 },
+      );
+    }
+
     let status = redirect.status;
 
     // Enable/disable toggles the DNS records that make the host resolve.

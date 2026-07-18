@@ -48,20 +48,22 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
   }
 
-  // Bound total issuance-check volume as a cert-abuse safeguard, regardless of
-  // source. Unknown domains are also rejected below before any issuance, so
-  // this mainly caps DB/CPU cost under a flood. The rate limiter doubles as a
-  // sampler for the denial log (denied domains are only logged when allowed
-  // through here), preventing log flooding.
-  const limit = Math.max(1, Number(process.env.REDIRECT_TLS_AUTH_RATE_LIMIT ?? 60) || 60);
-  const rl = await checkRateLimit("tls-authorize:global", limit);
-  if (!rl.allowed) {
-    return reply(429, "rate limited");
-  }
-
+  // Cheap syntactic validation FIRST, before any DB work, so a flood of junk
+  // SNIs is rejected with zero database cost (and never touches a rate bucket).
   const domain = new URL(req.url).searchParams.get("domain")?.trim().toLowerCase() ?? "";
   if (!isValidAuthorizeDomain(domain)) {
     return reply(400, "invalid domain");
+  }
+
+  // Rate-limit PER DOMAIN (not a single global bucket) so an attacker flooding
+  // one host - or a burst of first-visits to it - can never exhaust a shared
+  // bucket and deny certificate issuance for every other redirect host. NaN and
+  // non-positive values fall back to the default rather than being swallowed.
+  const parsed = Number(process.env.REDIRECT_TLS_AUTH_RATE_LIMIT);
+  const limit = Number.isInteger(parsed) && parsed > 0 ? parsed : 60;
+  const rl = await checkRateLimit(`tls-authorize:${domain}`, limit);
+  if (!rl.allowed) {
+    return reply(429, "rate limited");
   }
 
   const redirect = await findEnabledRedirectByFqdn(domain);

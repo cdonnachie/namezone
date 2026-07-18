@@ -22,21 +22,25 @@ export async function disableClaimedNameRecords(
   name: string,
   previousOwnerAddress: string,
 ): Promise<void> {
-  // Disable managed URL redirects in lockstep. Their underlying A/AAAA rows are
-  // ordinary DnsRecords handled by the loop below (removed from PowerDNS +
-  // marked DISABLED); this flips the redirect metadata the redirect service and
-  // TLS-authorize endpoint read, so the previous owner's redirects stop
-  // resolving immediately. Done before the early return so a name with
-  // redirects but no other records is still disabled.
-  await prisma.urlRedirect.updateMany({
-    where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
-    data: { status: "DISABLED", disabledReason: "OWNERSHIP_CHANGED" },
-  });
+  // Disable managed URL redirects in lockstep with their A/AAAA rows. Done LAST
+  // (after the DNS records are removed from PowerDNS below) so the effective
+  // kill - the host no longer resolving - happens first; if the process dies
+  // mid-way the worst case is a redirect briefly marked active with no DNS,
+  // which the next ownership sync / reconcile heals. Runs even when there are no
+  // DnsRecords, in case a redirect's records were manually removed.
+  const disableRedirects = () =>
+    prisma.urlRedirect.updateMany({
+      where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
+      data: { status: "DISABLED", disabledReason: "OWNERSHIP_CHANGED" },
+    });
 
   const records = await prisma.dnsRecord.findMany({
     where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
   });
-  if (records.length === 0) return;
+  if (records.length === 0) {
+    await disableRedirects();
+    return;
+  }
 
   const pdns = getPowerDnsClient();
   const seenRrsets = new Set<string>();
@@ -76,6 +80,8 @@ export async function disableClaimedNameRecords(
     where: { id: { in: records.map((r) => r.id) } },
     data: { status: "DISABLED", disabledReason: "OWNERSHIP_CHANGED" },
   });
+
+  await disableRedirects();
 }
 
 /**
@@ -176,9 +182,21 @@ async function expireStaleAcmeRecords(namespace: NamespaceConfig, names: string[
 }
 
 async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecords: PowerDnsRecordSummary[]): Promise<void> {
+  const pdns = getPowerDnsClient();
   const localRecords = await prisma.dnsRecord.findMany({
     where: { namespace: namespace.key, claimedName: name, status: "ACTIVE" },
   });
+
+  // Managed-redirect A/AAAA are owned by the UrlRedirect table, not by whatever
+  // is live in PowerDNS. Reconcile must (a) stamp isManagedRedirect so the flag
+  // survives a DB wipe / pre-seed / partial write (otherwise the record looks
+  // like a normal A and blocks redirect re-creation / can't be cleaned up), and
+  // (b) never resurrect a record whose redirect is DISABLED.
+  const managedRedirects = await prisma.urlRedirect.findMany({
+    where: { namespace: namespace.key, claimedName: name },
+    select: { fqdn: true, status: true },
+  });
+  const managedRedirectStatus = new Map(managedRedirects.map((r) => [r.fqdn, r.status]));
 
   // Everything except CNAME is multi-value (many values per fqdn+type):
   // A/AAAA (multiple IPs), MX, TXT. CNAME is the only single-value type (RFC:
@@ -233,6 +251,29 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
   for (const live of liveMulti) {
     const relativeHost = fqdnToRelativeHost(live.name, name, namespace);
     const isAcme = live.type === "TXT" && isAcmeChallengeHost(relativeHost);
+
+    // A/AAAA at a fqdn with a UrlRedirect row belong to the redirect subsystem.
+    const redirectStatus =
+      live.type === "A" || live.type === "AAAA" ? managedRedirectStatus.get(live.name) : undefined;
+    const isManagedRedirect = redirectStatus !== undefined;
+
+    if (isManagedRedirect && redirectStatus !== "ACTIVE") {
+      // Redirect is disabled/removed but its record is still live in PowerDNS
+      // (e.g. a transfer's best-effort delete failed). Re-remove it and mark any
+      // local row DISABLED - never adopt it as ACTIVE.
+      try {
+        await pdns.deleteRecord(namespace.dnsZone, live.name, live.type);
+        await pdns.notify(namespace.dnsZone);
+      } catch (err) {
+        console.error("[dns-reconcile] failed to remove stale managed-redirect record", live.name, live.type, err);
+      }
+      await prisma.dnsRecord.updateMany({
+        where: { namespace: namespace.key, fqdn: live.name, type: live.type, status: "ACTIVE" },
+        data: { status: "DISABLED", disabledReason: null, isManagedRedirect: true },
+      });
+      continue;
+    }
+
     await prisma.dnsRecord.upsert({
       where: {
         namespace_fqdn_type_value: { namespace: namespace.key, fqdn: live.name, type: live.type, value: live.content },
@@ -246,13 +287,14 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
         value: live.content,
         ttl: live.ttl,
         isAcmeChallenge: isAcme,
+        isManagedRedirect,
         // ACME challenges discovered outside the app have no known intended
         // lifetime - give them the standard default. Email TXT/MX are permanent.
         expiresAt: isAcme
           ? new Date(Date.now() + ACME_TXT_DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000)
           : null,
       },
-      update: { status: "ACTIVE", disabledReason: null },
+      update: { status: "ACTIVE", disabledReason: null, isManagedRedirect },
     });
   }
   for (const local of localRecords) {

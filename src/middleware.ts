@@ -30,7 +30,18 @@ const NAMESPACE_BY_HOST: Record<string, string> = {
   [RADIANT_ZONE]: "radiant",
 };
 
-const MANAGED_ZONES = [AVIAN_ZONE, RADIANT_ZONE];
+// Zones under which subdomains are routed to the redirect service. Defaults to
+// the two namespace zones; REDIRECT_BASE_ZONES (comma-separated) lets a new
+// namespace's zone be added at the edge without editing this file, keeping the
+// feature namespace-agnostic. (The bare-zone -> namespace-key rewrite in
+// NAMESPACE_BY_HOST is a separate, pre-existing concern.) Do NOT serve the
+// management app on a non-reserved subdomain of a managed zone - it would be
+// routed to the redirect service; host it on the bare zone or a separate domain.
+const CONFIGURED_REDIRECT_ZONES = (process.env.REDIRECT_BASE_ZONES ?? "")
+  .split(",")
+  .map((z) => z.trim().toLowerCase())
+  .filter(Boolean);
+const MANAGED_ZONES = CONFIGURED_REDIRECT_ZONES.length > 0 ? CONFIGURED_REDIRECT_ZONES : [AVIAN_ZONE, RADIANT_ZONE];
 
 /**
  * A host is a redirect candidate when it sits below a managed zone (deeper

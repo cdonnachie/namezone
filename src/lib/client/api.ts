@@ -1,3 +1,6 @@
+import { toUrlRedirectDto, type RedirectStatusCode, type UrlRedirectDto } from "@/lib/redirect/dto";
+export type { RedirectStatusCode, UrlRedirectDto } from "@/lib/redirect/dto";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -154,52 +157,15 @@ export function deleteAcmeChallenge(namespace: string, name: string, data: { hos
   });
 }
 
-export type RedirectStatusCode = 301 | 302 | 307 | 308;
-
-export interface UrlRedirectDto {
-  id: string;
-  claimedName: string;
-  fqdn: string;
-  relativeHost: string;
-  destinationUrl: string;
-  statusCode: RedirectStatusCode;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// The API routes return the raw row (status ACTIVE/DISABLED); normalize it to
-// the client DTO's `enabled` boolean and drop server-only fields.
-interface RawRedirectRow {
-  id: string;
-  claimedName: string;
-  fqdn: string;
-  relativeHost: string;
-  destinationUrl: string;
-  statusCode: number;
-  status: "ACTIVE" | "DISABLED";
-  createdAt: string;
-  updatedAt: string;
-}
-function toRedirectDto(r: RawRedirectRow): UrlRedirectDto {
-  return {
-    id: r.id,
-    claimedName: r.claimedName,
-    fqdn: r.fqdn,
-    relativeHost: r.relativeHost,
-    destinationUrl: r.destinationUrl,
-    statusCode: r.statusCode as RedirectStatusCode,
-    enabled: r.status === "ACTIVE",
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-  };
-}
+// The API routes return the raw Prisma row (status ACTIVE/DISABLED, dates as
+// ISO strings); toUrlRedirectDto normalizes it to the client DTO.
+type RawRedirectRow = Parameters<typeof toUrlRedirectDto>[0];
 
 export async function fetchRedirects(namespace: string, name: string): Promise<UrlRedirectDto[]> {
   const { redirects } = await request<{ redirects: RawRedirectRow[] }>(
     `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects`,
   );
-  return redirects.map(toRedirectDto);
+  return redirects.map(toUrlRedirectDto);
 }
 
 export async function createRedirect(
@@ -211,7 +177,7 @@ export async function createRedirect(
     `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects`,
     { method: "POST", body: JSON.stringify(data) },
   );
-  return toRedirectDto(redirect);
+  return toUrlRedirectDto(redirect);
 }
 
 export async function updateRedirect(
@@ -224,7 +190,7 @@ export async function updateRedirect(
     `/api/${namespace}/dns/${encodeURIComponent(name)}/redirects/${id}`,
     { method: "PATCH", body: JSON.stringify(data) },
   );
-  return toRedirectDto(redirect);
+  return toUrlRedirectDto(redirect);
 }
 
 export function deleteRedirect(namespace: string, name: string, id: string) {

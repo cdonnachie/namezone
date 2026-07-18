@@ -19,12 +19,25 @@
 	# email {$ACME_EMAIL}
 }
 
+# The internal TLS-authorize + any other /api/internal/* endpoints must never
+# be reachable from the public internet - only Caddy's own on_demand_tls `ask`
+# calls them, and those go straight to 127.0.0.1:3000 (not through a site
+# block). Blanket-block the path on every public site below. (snippet)
+(block_internal) {
+	handle /api/internal/* {
+		respond 403
+	}
+}
+
 # --- Management app -------------------------------------------------------
 # The operator's own domains (bare zones + any primary app host). Normal
 # (non-on-demand) certificates. Add every hostname the management UI serves on.
 {$MANAGEMENT_HOSTS:rxd.zone, avn.zone} {
+	import block_internal
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:3000
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
 }
 
 # --- Managed URL redirects ------------------------------------------------
@@ -42,6 +55,9 @@ https:// {
 	tls {
 		on_demand
 	}
+	import block_internal
 	encode zstd gzip
-	reverse_proxy 127.0.0.1:3000
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
 }

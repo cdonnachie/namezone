@@ -112,6 +112,9 @@ describe("validateDestinationUrl", () => {
       "http://[fe80::1]/",
       "http://[fc00::1]/",
       "http://[::ffff:127.0.0.1]/",
+      // Trailing-dot forms must not slip past the exact-match / IP checks.
+      "http://localhost./",
+      "http://127.0.0.1./",
     ]) {
       expect(validateDestinationUrl(host).ok, host).toBe(false);
     }
@@ -163,5 +166,22 @@ describe("wouldRedirectLoop", () => {
     expect(
       wouldRedirectLoop(source, "https://y.craigd.rxd.zone/", (fqdn) => map[fqdn]),
     ).toBe(false);
+  });
+
+  it("allows a chain of exactly MAX_REDIRECT_CHAIN_HOPS managed hops that terminates externally", () => {
+    // r1 -> r2 -> ... -> r10 -> https://external (10 managed hops, no loop).
+    const map: Record<string, string> = {};
+    for (let i = 1; i < 10; i++) map[`r${i}.craigd.rxd.zone.`] = `https://r${i + 1}.craigd.rxd.zone/`;
+    map["r10.craigd.rxd.zone."] = "https://external.example/";
+    expect(wouldRedirectLoop(source, "https://r1.craigd.rxd.zone/", (fqdn) => map[fqdn])).toBe(false);
+  });
+
+  it("rejects a chain that never terminates within the hop budget", () => {
+    // Every managed hop points to the next, past the budget, never leaving the zone.
+    const resolve = (fqdn: string): string => {
+      const n = Number(/^r(\d+)\./.exec(fqdn)?.[1] ?? "0");
+      return `https://r${n + 1}.craigd.rxd.zone/`;
+    };
+    expect(wouldRedirectLoop(source, "https://r1.craigd.rxd.zone/", resolve)).toBe(true);
   });
 });

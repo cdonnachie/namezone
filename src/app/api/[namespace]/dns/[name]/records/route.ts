@@ -182,7 +182,16 @@ export async function POST(
     // Limits/exclusivity run over all non-ACME records (A/AAAA/CNAME/MX and
     // email TXT); ACME TXT lives under its own hosts and its own limit.
     const existingForName = (await prisma.dnsRecord.findMany({
-      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", isAcmeChallenge: false },
+      // Exclude managed-redirect A/AAAA: they're surfaced as URL Redirects, not
+      // shown in the record table, so they must not silently consume the
+      // per-name hostname budget and block normal records.
+      where: {
+        namespace: ns.key,
+        claimedName: auth.name,
+        status: "ACTIVE",
+        isAcmeChallenge: false,
+        isManagedRedirect: false,
+      },
       select: { relativeHost: true, type: true },
     })) as ExistingBasicRecordSummary[];
     const limitResult = checkRecordLimits(existingForName, {

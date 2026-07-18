@@ -2,6 +2,15 @@ import { prisma } from "@/lib/db";
 import type { NamespaceConfig } from "@/lib/namespaces/types";
 import { getPowerDnsClient } from "@/lib/powerdns/client";
 import { REDIRECT_RECORD_TTL, redirectDnsRecords } from "./constants";
+import { wouldRedirectLoop } from "./validation";
+
+/** A redirect write was refused because a conflicting record/redirect exists. Maps to 409. */
+export class RedirectConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RedirectConflictError";
+  }
+}
 
 /**
  * Writes the managed A/AAAA records that point a redirect host at the redirect
@@ -18,6 +27,17 @@ export async function writeRedirectDnsRecords(
 ): Promise<void> {
   const pdns = getPowerDnsClient();
   const records = redirectDnsRecords(ns.key);
+
+  // A redirect host must be exclusive. The API conflict-check runs earlier, but
+  // re-check right before the whole-rrset REPLACE below to narrow the TOCTOU
+  // window: without this, a concurrently-added user A/AAAA at this fqdn would be
+  // silently wiped by the REPLACE. Turn that into a refusal, not data loss.
+  const conflicting = await prisma.dnsRecord.findFirst({
+    where: { namespace: ns.key, fqdn, status: "ACTIVE", isManagedRedirect: false },
+  });
+  if (conflicting) {
+    throw new RedirectConflictError("A DNS record already exists at this hostname.");
+  }
 
   for (const rec of records) {
     await pdns.upsertRawRecordSet(ns.dnsZone, fqdn, rec.type, [rec.value], REDIRECT_RECORD_TTL);
@@ -56,10 +76,41 @@ export async function removeRedirectDnsRecords(ns: NamespaceConfig, fqdn: string
   const pdns = getPowerDnsClient();
   const types = new Set(managed.map((r) => r.type));
   for (const type of types) {
-    await pdns.deleteRecord(ns.dnsZone, fqdn, type);
+    // Preserve any non-managed values coexisting at this (fqdn, type): rewrite
+    // the rrset with just those rather than deleting the whole set, so a user's
+    // own A/AAAA (if one ever slipped in alongside) isn't collaterally wiped.
+    const others = await prisma.dnsRecord.findMany({
+      where: { namespace: ns.key, fqdn, type, status: "ACTIVE", isManagedRedirect: false },
+    });
+    const remaining = others.map((r) => r.value);
+    if (remaining.length > 0) {
+      await pdns.upsertRawRecordSet(ns.dnsZone, fqdn, type as "A" | "AAAA", remaining, REDIRECT_RECORD_TTL);
+    } else {
+      await pdns.deleteRecord(ns.dnsZone, fqdn, type);
+    }
   }
   await pdns.notify(ns.dnsZone);
   await prisma.dnsRecord.deleteMany({ where: { namespace: ns.key, fqdn, isManagedRedirect: true } });
+}
+
+/**
+ * Shared redirect-loop guard for the create and enable/update paths: true if
+ * pointing `fqdn` at `destinationUrl` would loop back to itself directly or via
+ * other enabled managed redirects. The candidate destination is substituted at
+ * `fqdn` so chains through the row being written are seen.
+ */
+export async function redirectWouldLoop(
+  nsKey: string,
+  fqdn: string,
+  destinationUrl: string,
+): Promise<boolean> {
+  const active = await prisma.urlRedirect.findMany({
+    where: { namespace: nsKey, status: "ACTIVE" },
+    select: { fqdn: true, destinationUrl: true },
+  });
+  const destByFqdn = new Map(active.map((r) => [r.fqdn, r.destinationUrl]));
+  destByFqdn.set(fqdn, destinationUrl);
+  return wouldRedirectLoop(fqdn, destinationUrl, (f) => destByFqdn.get(f));
 }
 
 /** True if a non-redirect DNS record is active at this fqdn (a redirect there would conflict). */

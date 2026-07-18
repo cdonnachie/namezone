@@ -66,20 +66,25 @@ export function NamesBrowser({
     document.cookie = `${NAMES_VIEW_COOKIE}=${next}; Path=/; Max-Age=31536000; Secure; SameSite=Lax`;
   }
 
-  // One-time migration for browsers that saved the preference in
-  // localStorage before it moved to the cookie: adopt it (one final flash),
-  // then the cookie takes over and the legacy key is cleared. localStorage
-  // is only knowable after mount, so the post-mount set is unavoidable here
-  // - same pattern as the hash-driven tab in help-tabs.tsx.
+  // One-time migration for browsers that saved the preference in localStorage
+  // before it moved to the cookie: adopt it (one final flash) and persist it to
+  // the cookie, which then takes over. localStorage is only knowable after
+  // mount, so the post-mount set is unavoidable here (same pattern as the
+  // hash-driven tab in help-tabs.tsx). Crucially, the legacy key is dropped ONLY
+  // after the cookie has actually stuck - on a non-secure, non-localhost origin
+  // the Secure cookie is silently dropped, and removing localStorage first would
+  // lose the only durable copy of the preference.
   useEffect(() => {
     const legacy = localStorage.getItem(LEGACY_VIEW_STORAGE_KEY);
-    if (legacy === null) return;
-    localStorage.removeItem(LEGACY_VIEW_STORAGE_KEY);
-    if (legacy === "list" && initialView === "cards") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      changeView("list");
+    if (legacy !== "list" && legacy !== "cards") {
+      if (legacy !== null) localStorage.removeItem(LEGACY_VIEW_STORAGE_KEY);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    changeView(legacy);
+    if (document.cookie.includes(`${NAMES_VIEW_COOKIE}=`)) {
+      localStorage.removeItem(LEGACY_VIEW_STORAGE_KEY);
+    }
   }, []);
 
   const sorted = [...names].sort((a, b) => a.name.localeCompare(b.name));
