@@ -42,11 +42,18 @@ export function ConnectFlow({
   chainName,
   tld,
   addressPlaceholder,
+  next,
 }: {
   namespace: string;
   chainName: string;
   tld: string;
   addressPlaceholder: string;
+  /**
+   * Where to land after a successful sign-in, instead of the dashboard. Only
+   * ever a same-origin path - the page that renders this validates it, so a
+   * crafted ?next= cannot bounce a freshly authenticated user off-site.
+   */
+  next?: string;
 }) {
   return (
     <Card>
@@ -56,6 +63,7 @@ export function ConnectFlow({
           chainName={chainName}
           tld={tld}
           addressPlaceholder={addressPlaceholder}
+          next={next}
         />
       </CardContent>
     </Card>
@@ -67,11 +75,13 @@ function ManualVerification({
   chainName,
   tld,
   addressPlaceholder,
+  next,
 }: {
   namespace: string;
   chainName: string;
   tld: string;
   addressPlaceholder: string;
+  next?: string;
 }) {
   const [address, setAddress] = useState("");
   const [resolvedName, setResolvedName] = useState<string | null>(null);
@@ -120,7 +130,7 @@ function ManualVerification({
       // despite being logged in. A hard navigation can't be cancelled and
       // also re-renders the nav bar with the new session state, which is
       // what the refresh() was for.
-      window.location.assign(`/${namespace}/dashboard`);
+      window.location.assign(next ?? `/${namespace}/dashboard`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Verification failed.");
       setLoading(null);
