@@ -57,6 +57,7 @@ model ClaimedName {
 
   records   DnsRecord[]
   redirects UrlRedirect[]
+  sites     ManagedSite[]
 
   @@unique([namespace, name])
   @@index([namespace, ownerAddress])
@@ -104,6 +105,12 @@ model DnsRecord {
   // record table (surfaced as "URL Redirect" pseudo-records instead) and are
   // only deleted/replaced through the redirect flow - see src/lib/redirect/.
   isManagedRedirect Boolean                 @default(false)
+  // True for the A/AAAA/CNAME rows that point a hostname at a generated site
+  // (see src/lib/site/). Owned by the ManagedSite table rather than by the
+  // record editor: hidden from the raw record table, excluded from the
+  // per-name hostname budget, and only written or removed through the site
+  // flow. Mirrors isManagedRedirect - see the note there.
+  isManagedSite    Boolean                  @default(false)
   powerdnsRecordId String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -139,6 +146,41 @@ model UrlRedirect {
   @@unique([namespace, fqdn])
   @@index([namespace, claimedName])
   @@index([status])
+}
+
+/// A hostname pointed at a website built by a companion app (Wave Creator).
+///
+/// Name Zone does not serve the site - it only owns the DNS that reaches it,
+/// either A/AAAA at this server (self-hosted) or a CNAME to wherever the app
+/// deployed it (Vercel and the like). The row exists so the DNS records stay
+/// attributable: reconcile re-derives DnsRecord.isManagedSite from here, which
+/// is what lets a managed record survive a DB wipe without being mistaken for
+/// a record the owner typed in by hand.
+model ManagedSite {
+  id             String                   @id @default(cuid())
+  namespace      String                   // "avian" | "radiant" | ...
+  claimedName    String                   // e.g. "bob.rxd" - matches ClaimedName.name within namespace
+  claimedNameRef ClaimedName              @relation(fields: [namespace, claimedName], references: [namespace, name], onDelete: Cascade)
+  fqdn           String                   // "bob.rxd.zone." (absolute, trailing dot)
+  relativeHost   String                   // "@" for the name apex, or a label
+  // SELF_HOSTED writes A/AAAA at this server's site-service address;
+  // EXTERNAL writes a CNAME to cnameTarget (e.g. a Vercel deployment).
+  target         ManagedSiteTarget
+  cnameTarget    String?                  // set only when target = EXTERNAL
+  status         DnsRecordStatus          @default(ACTIVE)
+  disabledReason DnsRecordDisabledReason?
+  createdByWallet String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([namespace, fqdn])
+  @@index([namespace, claimedName])
+  @@index([status])
+}
+
+enum ManagedSiteTarget {
+  SELF_HOSTED
+  EXTERNAL
 }
 
 enum AuditAction {

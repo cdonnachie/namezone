@@ -44,6 +44,7 @@ import { requireClaimedNameOwnership } from "@/lib/ownership/sync";
 import { getPowerDnsClient } from "@/lib/powerdns/client";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { hasManagedRedirectAt } from "@/lib/redirect/service";
+import { hasManagedSiteAt } from "@/lib/site/service";
 
 async function buildCnameResolver(namespace: NamespaceConfig): Promise<(name: string) => string | undefined> {
   const allCnames = await prisma.dnsRecord.findMany({
@@ -134,6 +135,14 @@ export async function POST(
       );
     }
 
+    // Same exclusivity for a hostname pointed at a generated website.
+    if (await hasManagedSiteAt(ns.key, fqdn)) {
+      return NextResponse.json(
+        { error: "A website is already published at this hostname. Remove it before adding a record here." },
+        { status: 409 },
+      );
+    }
+
     // Validate the value per type and produce the exact string stored in both
     // the DB mirror and PowerDNS (for MX that's the "<priority> <target>." rdata).
     let storedValue: string;
@@ -191,6 +200,7 @@ export async function POST(
         status: "ACTIVE",
         isAcmeChallenge: false,
         isManagedRedirect: false,
+        isManagedSite: false,
       },
       select: { relativeHost: true, type: true },
     })) as ExistingBasicRecordSummary[];

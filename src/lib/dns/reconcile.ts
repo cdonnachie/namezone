@@ -198,6 +198,17 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
   });
   const managedRedirectStatus = new Map(managedRedirects.map((r) => [r.fqdn, r.status]));
 
+  // Managed-site records are owned by the ManagedSite table for exactly the
+  // same reasons (see the note above): the flag has to be re-derivable, or a
+  // record that survives a DB wipe looks like one the owner typed by hand and
+  // can never be cleaned up through the site flow. Unlike redirects these may
+  // be CNAME as well as A/AAAA, so both branches below consult this.
+  const managedSites = await prisma.managedSite.findMany({
+    where: { namespace: namespace.key, claimedName: name },
+    select: { fqdn: true, status: true },
+  });
+  const managedSiteStatus = new Map(managedSites.map((r) => [r.fqdn, r.status]));
+
   // Everything except CNAME is multi-value (many values per fqdn+type):
   // A/AAAA (multiple IPs), MX, TXT. CNAME is the only single-value type (RFC:
   // a CNAME node holds exactly one, and nothing else).
@@ -216,6 +227,26 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     }
 
     const relativeHost = fqdnToRelativeHost(live.name, name, namespace);
+    const siteStatus = managedSiteStatus.get(live.name);
+    const isManagedSite = siteStatus !== undefined;
+
+    if (isManagedSite && siteStatus !== "ACTIVE") {
+      // Site is disabled/removed but its record is still live in PowerDNS
+      // (e.g. a transfer's best-effort delete failed). Re-remove it and mark
+      // any local row DISABLED - never adopt it as ACTIVE.
+      try {
+        await pdns.deleteRecord(namespace.dnsZone, live.name, live.type);
+        await pdns.notify(namespace.dnsZone);
+      } catch (err) {
+        console.error("[dns-reconcile] failed to remove stale managed-site record", live.name, live.type, err);
+      }
+      await prisma.dnsRecord.updateMany({
+        where: { namespace: namespace.key, fqdn: live.name, type: live.type, status: "ACTIVE" },
+        data: { status: "DISABLED", disabledReason: null, isManagedSite: true },
+      });
+      continue;
+    }
+
     await prisma.dnsRecord.upsert({
       where: {
         namespace_fqdn_type_value: { namespace: namespace.key, fqdn: live.name, type: live.type, value: live.content },
@@ -228,12 +259,13 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
         type: live.type,
         value: live.content,
         ttl: live.ttl,
+        isManagedSite,
       },
       // A matching row might be a previously-DISABLED one (e.g. the exact
       // same value existed before an ownership transfer and PowerDNS
       // somehow still had it) - a live PowerDNS record means it should read
       // as active regardless of that prior state.
-      update: { ttl: live.ttl, relativeHost, status: "ACTIVE", disabledReason: null },
+      update: { ttl: live.ttl, relativeHost, status: "ACTIVE", disabledReason: null, isManagedSite },
     });
   }
   for (const local of localRecords) {
@@ -256,6 +288,25 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
     const redirectStatus =
       live.type === "A" || live.type === "AAAA" ? managedRedirectStatus.get(live.name) : undefined;
     const isManagedRedirect = redirectStatus !== undefined;
+
+    // A self-hosted site writes A/AAAA at its fqdn, same shape as a redirect.
+    const siteStatus =
+      live.type === "A" || live.type === "AAAA" ? managedSiteStatus.get(live.name) : undefined;
+    const isManagedSite = siteStatus !== undefined;
+
+    if (isManagedSite && siteStatus !== "ACTIVE") {
+      try {
+        await pdns.deleteRecord(namespace.dnsZone, live.name, live.type);
+        await pdns.notify(namespace.dnsZone);
+      } catch (err) {
+        console.error("[dns-reconcile] failed to remove stale managed-site record", live.name, live.type, err);
+      }
+      await prisma.dnsRecord.updateMany({
+        where: { namespace: namespace.key, fqdn: live.name, type: live.type, status: "ACTIVE" },
+        data: { status: "DISABLED", disabledReason: null, isManagedSite: true },
+      });
+      continue;
+    }
 
     if (isManagedRedirect && redirectStatus !== "ACTIVE") {
       // Redirect is disabled/removed but its record is still live in PowerDNS
@@ -288,13 +339,14 @@ async function reconcileOne(namespace: NamespaceConfig, name: string, liveRecord
         ttl: live.ttl,
         isAcmeChallenge: isAcme,
         isManagedRedirect,
+        isManagedSite,
         // ACME challenges discovered outside the app have no known intended
         // lifetime - give them the standard default. Email TXT/MX are permanent.
         expiresAt: isAcme
           ? new Date(Date.now() + ACME_TXT_DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000)
           : null,
       },
-      update: { status: "ACTIVE", disabledReason: null, isManagedRedirect },
+      update: { status: "ACTIVE", disabledReason: null, isManagedRedirect, isManagedSite },
     });
   }
   for (const local of localRecords) {

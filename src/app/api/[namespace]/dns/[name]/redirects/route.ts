@@ -19,6 +19,7 @@ import {
   writeRedirectDnsRecords,
 } from "@/lib/redirect/service";
 import { validateDestinationUrl, validateRedirectHost } from "@/lib/redirect/validation";
+import { hasManagedSiteAt } from "@/lib/site/service";
 
 export async function GET(
   req: Request,
@@ -103,6 +104,16 @@ export async function POST(
       return NextResponse.json(
         { error: "This redirect points back to itself (a redirect loop)." },
         { status: 400 },
+      );
+    }
+
+    // Conflict: a published website already owns this hostname. Checked before
+    // the generic record test below, which would otherwise catch the site's own
+    // records and report the far less useful "a DNS record already exists".
+    if (await hasManagedSiteAt(ns.key, fqdn)) {
+      return NextResponse.json(
+        { error: "A website is already published at this hostname. Remove it before creating a redirect here." },
+        { status: 409 },
       );
     }
 

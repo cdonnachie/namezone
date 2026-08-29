@@ -30,7 +30,14 @@ export async function GET(
     // Managed-redirect A/AAAA rows are surfaced as "URL Redirect"
     // pseudo-records via the redirects endpoint, not as raw records here.
     const records = await prisma.dnsRecord.findMany({
-      where: { namespace: ns.key, claimedName: auth.name, status: "ACTIVE", isManagedRedirect: false },
+      where: {
+        namespace: ns.key,
+        claimedName: auth.name,
+        status: "ACTIVE",
+        isManagedRedirect: false,
+        // Surfaced as published websites, not as raw records.
+        isManagedSite: false,
+      },
       orderBy: { createdAt: "asc" },
     });
 
