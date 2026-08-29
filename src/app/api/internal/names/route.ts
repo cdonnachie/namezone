@@ -63,7 +63,10 @@ export async function GET(req: Request) {
       address,
       names: summaries.map((s) => ({
         name: s.name,
-        zone: s.zone,
+        // Trailing dot stripped: this is a hostname for display and for
+        // building URLs, not a wire-format FQDN. Matches /verified and
+        // /api/internal/sites.
+        zone: s.zone.replace(/\.$/, ""),
         recordCount: s.recordCount,
         lastUpdated: s.lastUpdated.toISOString(),
       })),
