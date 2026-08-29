@@ -301,6 +301,74 @@ importing `src/lib/namespaces` directly, since that module composes each namespa
 Keep `NAMESPACE_BY_HOST` in `middleware.ts` in sync by hand if `AVIAN_DNS_ZONE`/`RADIANT_DNS_ZONE`
 ever change.
 
+## Deployment topology & the internal API
+
+Routes under `/api/internal/*` are for co-located callers only and **must not be reachable from
+the public internet**. Three things use them:
+
+| Endpoint | Caller | Auth |
+| --- | --- | --- |
+| `GET /api/internal/tls/authorize` | Caddy's `on_demand_tls` **ask** | optional `REDIRECT_TLS_AUTH_SECRET` |
+| `GET /api/internal/names` | a companion app | `INTERNAL_API_SECRET` (required) |
+| `GET/POST/DELETE /api/internal/sites` | a companion app | `INTERNAL_API_SECRET` (required) |
+
+Every one of those addresses the app directly — `127.0.0.1:3000`, or its private address over a
+LAN/VPN — so nothing legitimate reaches these routes through a public hostname. `sites` writes
+DNS. The shared secret is meant to be the inner layer, not the only one.
+
+### Every front end needs its own block
+
+`deploy/Caddyfile` ships a `(block_internal)` snippet, and `deploy/nginx.conf.example` the
+equivalent `location ^~ /api/internal/`. Use whichever matches your setup — **and use one in each
+front end you run.**
+
+It is entirely reasonable to split them:
+
+```
+rxd.zone, avn.zone    -> nginx  -> 127.0.0.1:3000      # management app
+x.craigd.rxd.zone     -> Caddy  -> 127.0.0.1:3000      # on-demand redirect hosts
+```
+
+possibly on different IP addresses. In that arrangement a block in Caddy protects only the
+hostnames Caddy serves and says nothing whatsoever about nginx's. The failure is quiet and
+convincing: the Caddy config is correct, `caddy validate` passes, the route is present in
+`localhost:2019/config/`, and the path stays open — because those requests never reach Caddy.
+
+Two things worth knowing before debugging that:
+
+- **A Caddy snippet does nothing until it is imported.** Defining `(block_internal)` and
+  forgetting `import block_internal` in a site block leaves that host unprotected, and Caddy
+  starts cleanly with no warning.
+- **`caddy validate` only reads the file.** Applying it takes
+  `caddy reload --config /etc/caddy/Caddyfile`.
+
+Identify who is really answering before editing anything further:
+
+```bash
+curl -sI https://rxd.zone/api/internal/nonexistent | grep -i '^server:'
+curl -s -o /dev/null -w '%{http_code}
+' https://rxd.zone/api/internal/nonexistent   # want 403
+```
+
+Blocking the path publicly never breaks on-demand TLS — Caddy's `ask` goes straight to
+`127.0.0.1:3000`, bypassing every site block.
+
+### Give your own hostnames ordinary certificates
+
+The zone apex (`rxd.zone`) has no `UrlRedirect` row, so the authorize endpoint **denies**
+certificate issuance for it — correctly, since that endpoint exists to gate redirect hostnames.
+If your own hostnames fall through to the on-demand catch-all instead of having their own site
+block, TLS works until the certificate needs re-issuing and then fails. Serve them from a block
+with normal ACME (the `{$MANAGEMENT_HOSTS}` block in `deploy/Caddyfile`, or an nginx server block
+with a certbot certificate).
+
+### Companion apps
+
+An app using both the sign-in handoff and the internal API needs **two** addresses: the public URL
+the browser is redirected to for sign-in, and a private address for its own server-to-server
+calls. Collapsing them into one works only while `/api/internal/*` is still publicly reachable —
+and then breaks the moment that is fixed. See `NAMEZONE_INTERNAL_URL` in the Wave Creator repo.
+
 ## Security rules enforced
 
 - Hostnames beginning with `_` are rejected, with narrow exceptions: `_acme-challenge`

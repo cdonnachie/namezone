@@ -1,0 +1,80 @@
+# nginx front end for the Name Zone management app.
+#
+# Only needed when nginx — rather than Caddy — terminates TLS for the operator's
+# own hostnames. A perfectly reasonable split is:
+#
+#     rxd.zone, avn.zone   -> nginx  -> 127.0.0.1:3000   (this file)
+#     *.rxd.zone redirects -> Caddy  -> 127.0.0.1:3000   (deploy/Caddyfile)
+#
+# The two front ends can even live on different addresses. What matters is that
+# EVERY one of them blocks /api/internal/*: a block in Caddy protects only the
+# hostnames Caddy serves, and says nothing about the ones nginx serves.
+#
+# Certificates here are assumed to come from certbot or equivalent. The
+# on-demand issuance in deploy/Caddyfile applies only to redirect hostnames,
+# which are too deep for a single wildcard; the operator's own names should
+# hold ordinary certificates.
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name rxd.zone avn.zone;
+
+    ssl_certificate     /etc/letsencrypt/live/rxd.zone/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/rxd.zone/privkey.pem;
+
+    # ---------------------------------------------------------------------
+    # Internal API: never reachable from the public internet.
+    #
+    # /api/internal/* is called only by co-located services — Caddy's
+    # on_demand_tls `ask`, and any companion app on the same host or private
+    # network — all of which address the app directly on 127.0.0.1:3000 or its
+    # internal address. Nothing legitimate reaches these routes through a
+    # public hostname, so refusing them here costs nothing.
+    #
+    # Some of these endpoints write DNS. They do check a shared secret, but
+    # that secret is meant to be the inner layer, not the only one.
+    #
+    # ^~ makes this a priority prefix match: it beats any regex location, so a
+    # location added later cannot accidentally re-expose the path.
+    # ---------------------------------------------------------------------
+    location ^~ /api/internal/ {
+        return 403;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        # The app reads the client address from X-Forwarded-For for rate
+        # limiting and audit logs. Without it every caller shares one bucket.
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Websocket/upgrade support for Next.js dev tooling and any future
+        # streaming routes.
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_read_timeout 60s;
+    }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name rxd.zone avn.zone;
+    return 301 https://$host$request_uri;
+}
+
+# Verify after reloading, from OUTSIDE the network:
+#
+#     curl -s -o /dev/null -w '%{http_code}\n' https://rxd.zone/api/internal/nonexistent   # want 403
+#     curl -sI https://rxd.zone/ | grep -i '^server:'                                      # who answers?
+#
+# The second command matters: if a block appears to have no effect, confirm
+# which front end is actually serving that hostname before editing further.

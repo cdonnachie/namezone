@@ -8,6 +8,38 @@
 # Caddy mint a cert for an unconfigured host.
 #
 # Replace the {$...} placeholders (or set them in Caddy's environment).
+#
+# ---------------------------------------------------------------------------
+# IF CADDY IS NOT YOUR ONLY FRONT END, READ THIS
+#
+# This file assumes Caddy terminates TLS for every hostname. A deployment can
+# just as reasonably put the management app behind nginx on one address and
+# leave Caddy handling only the on-demand redirect hostnames on another:
+#
+#     rxd.zone           -> nginx  -> 127.0.0.1:3000
+#     x.craigd.rxd.zone  -> Caddy  -> 127.0.0.1:3000
+#
+# In that split, the block_internal snippet below protects ONLY the hostnames
+# Caddy serves. /api/internal/* stays wide open on everything nginx serves, and
+# no amount of validating or reloading Caddy will change that - the config is
+# correct, it simply never sees those requests. `curl -sI <host>/api/internal/x`
+# and read the Server: header to find out who is actually answering.
+#
+# EVERY front end needs its own equivalent block. For nginx, inside each server
+# block, above the location that proxies to the app:
+#
+#     location ^~ /api/internal/ {
+#         return 403;
+#     }
+#
+# The ^~ prefix match takes priority over regex locations, so nothing declared
+# later can re-expose the path.
+#
+# Blocking the path publicly never breaks on-demand TLS: Caddy's `ask` calls
+# 127.0.0.1:3000 directly, not through any site block. Co-hosted companion apps
+# must likewise reach the app on its internal address rather than through a
+# public hostname (see NAMEZONE_INTERNAL_URL in the Wave Creator repo).
+# ---------------------------------------------------------------------------
 
 {
 	# Ask the app before issuing any on-demand certificate. Runs on localhost;
@@ -23,6 +55,10 @@
 # be reachable from the public internet - only Caddy's own on_demand_tls `ask`
 # calls them, and those go straight to 127.0.0.1:3000 (not through a site
 # block). Blanket-block the path on every public site below. (snippet)
+#
+# A snippet does nothing until it is imported: defining (block_internal) and
+# forgetting the `import` in a site block leaves that host unprotected, and
+# Caddy starts cleanly with no warning.
 (block_internal) {
 	handle /api/internal/* {
 		respond 403
