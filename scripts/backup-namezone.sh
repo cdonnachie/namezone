@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# Non-AWS S3 compatibility: recent awscli attaches integrity checksums by
+# default, which providers like Contabo reject. when_required sends them only
+# when an operation demands it; harmless no-op on older awscli.
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+
+
 # Backs up the Name Zone app database (Prisma SQLite) and its config to Contabo
 # Object Storage, mirroring the PowerDNS backup. Runs as a hot online backup -
 # no need to stop the service. Intended for cron on the app host.
